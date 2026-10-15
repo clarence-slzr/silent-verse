@@ -28,7 +28,6 @@ export class Game {
             500
         );
 
-        // === LIGHTS ===
         const ambient = new THREE.AmbientLight(0x403060, 0.8);
         this.scene.add(ambient);
 
@@ -46,22 +45,17 @@ export class Game {
         this.sun.shadow.camera.far = 300;
         this.scene.add(this.sun);
 
-        // === WORLD ===
         const worldData = createWorld(this.scene);
         this.getGroundHeight = worldData.getGroundHeight;
 
-        // === PLAYER ===
         this.gender = null;
         this.player = null;
 
-        // === ORBS ===
         this.orbs = createPoemOrbs(this.scene, PUZZLES, this.getGroundHeight);
         this.collectedCount = 0;
 
-        // === NPC PARTNER (spawn sa dulo) ===
         this.partner = null;
 
-        // === STATE ===
         this.keys = {};
         this.mouse = { x: 0, y: 0 };
         this.cameraAngle = { yaw: 0, pitch: -0.15 };
@@ -71,7 +65,6 @@ export class Game {
         this.puzzleActive = false;
         this.ended = false;
 
-        // === UI ===
         this.counterEl = document.getElementById('counter');
         this.puzzleModal = document.getElementById('puzzle-modal');
         this.puzzlePoem = document.getElementById('puzzle-poem');
@@ -88,7 +81,6 @@ export class Game {
         this.gender = gender;
         this.player = createCharacter(this.scene, gender);
         this.player.position.set(0, this.getGroundHeight(0, 0), 0);
-        // Kunin ang camera
         this.updateCamera(0);
         audio.startBg();
     }
@@ -113,7 +105,6 @@ export class Game {
             if (e.key === 'Shift') this.isRunning = false;
         });
 
-        // Pointer lock
         this.canvas.addEventListener('click', () => {
             if (this.puzzleActive || this.ended) return;
             if (!document.pointerLockElement && this.player) {
@@ -124,10 +115,6 @@ export class Game {
             }
         });
 
-        document.addEventListener('pointerlockchange', () => {
-            // optional: pause effects
-        });
-
         document.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement === this.canvas) {
                 this.cameraAngle.yaw -= e.movementX * 0.0025;
@@ -136,7 +123,6 @@ export class Game {
             }
         });
 
-        // Puzzle submit
         document.getElementById('submit-answer').addEventListener('click', () => this.submitAnswer());
         document.getElementById('close-puzzle').addEventListener('click', () => this.closePuzzle());
         this.puzzleInput.addEventListener('keydown', (e) => {
@@ -152,7 +138,6 @@ export class Game {
         if (!this.player) return;
         const targetY = this.player.position.y + 1.6;
 
-        // Camera orbit sa paligid ng player
         const dist = 7;
         const camX = this.player.position.x + Math.sin(this.cameraAngle.yaw) * dist * Math.cos(this.cameraAngle.pitch);
         const camZ = this.player.position.z + Math.cos(this.cameraAngle.yaw) * dist * Math.cos(this.cameraAngle.pitch);
@@ -186,22 +171,18 @@ export class Game {
         if (move.length() > 0) {
             move.normalize();
             const next = this.player.position.clone().addScaledVector(move, speed * dt);
-            // Limit sa mundo
             const maxR = 95;
             if (next.length() < maxR) {
                 next.y = this.getGroundHeight(next.x, next.z);
                 this.player.position.copy(next);
-                // Rotation ng player
                 const targetRot = Math.atan2(move.x, move.z);
                 this.player.rotation.y = this.lerpAngle(this.player.rotation.y, targetRot, 0.15);
             }
         }
 
-        // Bobbing animation
         const t = performance.now() * 0.005;
         this.player.children.forEach((c, i) => {
             if (c.geometry && c.geometry.type === 'CylinderGeometry' && i < 2) {
-                // legs
                 c.rotation.x = Math.sin(t + i) * 0.15 * (move.length() > 0 ? 1 : 0);
             }
         });
@@ -223,7 +204,6 @@ export class Game {
         this.orbs.forEach((orb) => {
             if (orb.userData.collected) return;
 
-            // Floating animation
             orb.userData.time += dt;
             orb.position.y = orb.userData.baseY + Math.sin(t * 1.5 + orb.userData.time) * 0.2;
             orb.rotation.y += dt * 0.5;
@@ -237,7 +217,6 @@ export class Game {
             }
         });
 
-        // Show/hide prompt
         if (this.nearOrb && !this.puzzleActive && !this.ended) {
             this.interactPrompt.classList.add('show');
             const idx = this.nearOrb.userData.index;
@@ -289,7 +268,6 @@ export class Game {
         this.collectedCount++;
         this.counterEl.textContent = `Nahanap: ${this.collectedCount} / ${PUZZLES.length}`;
 
-        // Effect: lumipad pataas at mag-fade
         let scale = 1;
         const dissolve = () => {
             scale -= 0.05;
@@ -314,48 +292,40 @@ export class Game {
         this.currentOrb = null;
     }
 
-    async startEnding() {
+    startEnding() {
         this.ended = true;
         this.interactPrompt.classList.remove('show');
 
-        // Ilipat ang player sa gitna ng damuhan para sa ending
         const endX = 0, endZ = 0;
         this.player.position.set(endX, this.getGroundHeight(endX, endZ), endZ);
         this.player.rotation.y = 0;
 
-        // Idagdag ang partner sa harap
         const partnerGender = this.gender === 'male' ? 'female' : 'male';
         this.partner = createCharacter(this.scene, partnerGender);
         const px = endX, pz = endZ - 3;
         this.partner.position.set(px, this.getGroundHeight(px, pz), pz);
-        this.partner.rotation.y = Math.PI; // nakaharap sa player
+        this.partner.rotation.y = Math.PI;
 
-        // Idagdag ang bulaklak
         this.flower = createFlower();
         this.flower.position.set(0, this.getGroundHeight(0, -1.5) + 1, -1.5);
         this.flower.visible = false;
         this.scene.add(this.flower);
 
-        // Baguhin ang lighting para maging sunset
         this.animateSunset();
 
-        // Ilipat ang camera para maging cinematic
         this.cameraAngle.yaw = Math.PI;
         this.cameraAngle.pitch = -0.1;
 
-        // Hintayin ang sunset tapos ipakita ang flower
         setTimeout(() => {
             this.flower.visible = true;
             audio.endingChime();
             this.flowerAnimation();
         }, 3500);
 
-        // Ipakita ang ending poem pagkatapos ng lahat
         setTimeout(() => this.showEndingPoem(), 6000);
     }
 
     animateSunset() {
-        // Unti-unting binabago ang kulay ng langit at ilaw para maging sunset
         const startBg = new THREE.Color(0x1a1030);
         const endBg = new THREE.Color(0xff7a4a);
         const startSun = new THREE.Color(0xffd8a0);
@@ -382,7 +352,6 @@ export class Game {
     }
 
     flowerAnimation() {
-        // Ang flower ay lumulutang pataas papunta sa kamay ng player
         const startY = this.flower.position.y;
         const targetY = this.player.position.y + 1.3;
         const duration = 2000;
@@ -426,7 +395,6 @@ patungo sa puso mong tahanan."`;
         document.getElementById('ending-poem').textContent = poem;
         endingScreen.classList.add('active');
 
-        // Hawak-kamay effect
         this.handHoldAnimation();
     }
 

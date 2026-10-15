@@ -1,7 +1,3 @@
-// puzzles.js
-// ==== DITO MO ILALAGAY ANG SARILING TULA ====
-// Format: { poem: "tula mo", question: "tanong", answers: ["sagot1","sagot2"] }
-
 export const PUZZLES = [
     {
         poem:

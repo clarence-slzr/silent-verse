@@ -4,10 +4,8 @@ export function createWorld(scene) {
     const world = new THREE.Group();
     scene.add(world);
 
-    // === FOG & AMBIENCE ===
     scene.fog = new THREE.FogExp2(0x1a1030, 0.018);
 
-    // === GROUND (malaking damo field) ===
     const groundGeo = new THREE.PlaneGeometry(400, 400, 64, 64);
     const positions = groundGeo.attributes.position;
     for (let i = 0; i < positions.count; i++) {
@@ -28,7 +26,6 @@ export function createWorld(scene) {
     ground.receiveShadow = true;
     world.add(ground);
 
-    // === DAMO (grass blades — instanced) ===
     const bladeGeo = new THREE.ConeGeometry(0.08, 0.6, 3);
     const bladeMat = new THREE.MeshStandardMaterial({ color: 0x4a7a3a, roughness: 1 });
     const grassCount = 3000;
@@ -48,7 +45,6 @@ export function createWorld(scene) {
     }
     world.add(grass);
 
-    // === MGA PUNO (simple stylized trees) ===
     for (let i = 0; i < 40; i++) {
         const angle = Math.random() * Math.PI * 2;
         const radius = 25 + Math.random() * 70;
@@ -58,7 +54,6 @@ export function createWorld(scene) {
         world.add(createTree(x, y, z));
     }
 
-    // === MGA BATO ===
     for (let i = 0; i < 30; i++) {
         const angle = Math.random() * Math.PI * 2;
         const radius = 15 + Math.random() * 80;
@@ -74,7 +69,6 @@ export function createWorld(scene) {
         world.add(rock);
     }
 
-    // === MGA ILaw na bulaklak (glowing) ===
     for (let i = 0; i < 60; i++) {
         const angle = Math.random() * Math.PI * 2;
         const radius = 5 + Math.random() * 90;
@@ -89,7 +83,6 @@ export function createWorld(scene) {
         );
         flower.position.set(x, y + 0.3, z);
         world.add(flower);
-        // Point light na maliit
         const light = new THREE.PointLight(c, 0.4, 4);
         light.position.copy(flower.position);
         world.add(light);
@@ -100,7 +93,6 @@ export function createWorld(scene) {
 
 function createTree(x, y, z) {
     const group = new THREE.Group();
-    // Trunk
     const trunk = new THREE.Mesh(
         new THREE.CylinderGeometry(0.3, 0.5, 4, 6),
         new THREE.MeshStandardMaterial({ color: 0x3a2418, roughness: 1, flatShading: true })
@@ -109,7 +101,6 @@ function createTree(x, y, z) {
     trunk.castShadow = true;
     group.add(trunk);
 
-    // Foliage — ilang spheres
     const foliageMat = new THREE.MeshStandardMaterial({ color: 0x3d6b3d, roughness: 1, flatShading: true });
     for (let i = 0; i < 3; i++) {
         const foliage = new THREE.Mesh(
@@ -128,12 +119,10 @@ function createTree(x, y, z) {
     return group;
 }
 
-// ==== MGA TULA ORB (interactive puzzle objects) ====
 export function createPoemOrbs(scene, puzzles, getGroundHeight) {
     const orbs = [];
     const colors = [0xc9a0ff, 0xffb3d9, 0xa0d8ff, 0xffe0a0, 0xb0ffd0];
 
-    // Iposisyon sa iba't ibang sulok ng mundo
     const positions = [
         { x: 20, z: -15 },
         { x: -30, z: 25 },
@@ -149,12 +138,10 @@ export function createPoemOrbs(scene, puzzles, getGroundHeight) {
         const group = new THREE.Group();
         group.position.set(pos.x, y + 1.5, pos.z);
 
-        // Glowing core
         const coreMat = new THREE.MeshBasicMaterial({ color: colors[i % colors.length] });
         const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 1), coreMat);
         group.add(core);
 
-        // Outer shell
         const shellMat = new THREE.MeshBasicMaterial({
             color: colors[i % colors.length],
             transparent: true,
@@ -164,11 +151,9 @@ export function createPoemOrbs(scene, puzzles, getGroundHeight) {
         const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(0.9, 1), shellMat);
         group.add(shell);
 
-        // Light
         const light = new THREE.PointLight(colors[i % colors.length], 2, 12);
         group.add(light);
 
-        // Floating animation data
         group.userData = {
             index: i,
             puzzle: p,
@@ -187,14 +172,12 @@ export function createPoemOrbs(scene, puzzles, getGroundHeight) {
     return orbs;
 }
 
-// ==== MGA CHARACTER (lalaki at babae) ====
 export function createCharacter(scene, type = 'male') {
     const group = new THREE.Group();
 
     const skinColor = 0xf0c8a0;
     const clothColor = type === 'male' ? 0x4a6b9a : 0xb85a8a;
 
-    // Ulo
     const head = new THREE.Mesh(
         new THREE.SphereGeometry(0.35, 16, 16),
         new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.8 })
@@ -203,7 +186,6 @@ export function createCharacter(scene, type = 'male') {
     head.castShadow = true;
     group.add(head);
 
-    // Buhok
     const hair = new THREE.Mesh(
         new THREE.SphereGeometry(0.37, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.6),
         new THREE.MeshStandardMaterial({
@@ -214,7 +196,6 @@ export function createCharacter(scene, type = 'male') {
     hair.position.y = 1.75;
     group.add(hair);
 
-    // Katawan
     const body = new THREE.Mesh(
         new THREE.CylinderGeometry(0.28, 0.35, 1.0, 12),
         new THREE.MeshStandardMaterial({ color: clothColor, roughness: 0.8, flatShading: true })
@@ -223,7 +204,6 @@ export function createCharacter(scene, type = 'male') {
     body.castShadow = true;
     group.add(body);
 
-    // Mga braso
     const armMat = new THREE.MeshStandardMaterial({ color: clothColor, roughness: 0.8 });
     const armGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.8, 8);
     const armL = new THREE.Mesh(armGeo, armMat);
@@ -235,7 +215,6 @@ export function createCharacter(scene, type = 'male') {
     armR.rotation.z = -0.15;
     group.add(armR);
 
-    // Mga binti
     const legMat = new THREE.MeshStandardMaterial({ color: 0x2a2a3a, roughness: 0.9 });
     const legGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.8, 8);
     const legL = new THREE.Mesh(legGeo, legMat);
@@ -245,7 +224,6 @@ export function createCharacter(scene, type = 'male') {
     legR.position.set(0.13, 0.4, 0);
     group.add(legR);
 
-    // Eyes
     const eyeMat = new THREE.MeshBasicMaterial({ color: 0x1a1a2a });
     const eyeGeo = new THREE.SphereGeometry(0.05, 8, 8);
     const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
@@ -259,11 +237,9 @@ export function createCharacter(scene, type = 'male') {
     return group;
 }
 
-// ==== FLOWER (para sa ending) ====
 export function createFlower() {
     const group = new THREE.Group();
 
-    // Stem
     const stem = new THREE.Mesh(
         new THREE.CylinderGeometry(0.03, 0.03, 0.6, 6),
         new THREE.MeshStandardMaterial({ color: 0x3a7a3a, roughness: 1 })
@@ -271,7 +247,6 @@ export function createFlower() {
     stem.position.y = 0.3;
     group.add(stem);
 
-    // Petals
     const petalMat = new THREE.MeshStandardMaterial({
         color: 0xff5a9a,
         emissive: 0xff2060,
@@ -286,7 +261,6 @@ export function createFlower() {
         group.add(petal);
     }
 
-    // Center
     const center = new THREE.Mesh(
         new THREE.SphereGeometry(0.08, 8, 8),
         new THREE.MeshBasicMaterial({ color: 0xffe066 })
@@ -294,7 +268,6 @@ export function createFlower() {
     center.position.y = 0.65;
     group.add(center);
 
-    // Light
     const light = new THREE.PointLight(0xff7ab0, 1.5, 5);
     light.position.y = 0.7;
     group.add(light);

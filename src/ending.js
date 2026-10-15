@@ -1,4 +1,3 @@
-// ending.js — Optional na helper kung gusto mong paghiwalayin ang ending logic
 export const ENDING_VERSE = {
     male: `Sa ilalim ng nagbabagang takipsilim,
 ang bulaklak ay iniabot ng iyong kamay.

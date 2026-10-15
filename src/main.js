@@ -3,7 +3,6 @@ import { Game } from './game.js';
 
 const game = new Game();
 
-// Start screen logic
 const startScreen = document.getElementById('start-screen');
 
 document.getElementById('pick-male').addEventListener('click', () => {
@@ -16,7 +15,6 @@ document.getElementById('pick-female').addEventListener('click', () => {
     game.start('female');
 });
 
-// Global error handler
 window.addEventListener('error', (e) => {
     console.error('Error:', e.error);
 });
