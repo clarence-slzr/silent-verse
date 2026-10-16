@@ -1,5 +1,4 @@
-// puzzles.js — Multiple choice poems
-// Format: { excerpt, question, choices, correct, source }
+// puzzles.js — 7 poems with A/B/C/D multiple choice
 
 export const PUZZLES = [
     {
@@ -10,9 +9,10 @@ were not the adversary of love, but its most
 merciless tutor.
 
 We spend our lives believing affection ripens
-beneath sunlight...`,
+beneath sunlight — until absence arrives
+with the unhurried certainty of winter.`,
         question: 'What is the title of this poem?',
-        choices: ['Viraha', 'Halaga', 'Haraya', 'XLVI'],
+        choices: ['Haraya', 'Viraha', 'Halaga', 'XLVI'],
         correct: 'Viraha'
     },
     {
@@ -24,7 +24,7 @@ each hoping the other will offer
 something that both desire
 but neither is willing to begin.`,
         question: 'What is the title of this poem?',
-        choices: ['Mamihlapinatapai', 'Viraha', 'Kundiman sa Gitna ng Dilim', 'Ang Agham ng Iyong Ngiti'],
+        choices: ['Kundiman sa Gitna ng Dilim', 'Mamihlapinatapai', 'Ang Agham ng Iyong Ngiti', 'Viraha'],
         correct: 'Mamihlapinatapai'
     },
     {
@@ -35,7 +35,7 @@ arranged in careful rows,
 each one whispering a name
 that only silence knows.`,
         question: 'What is the title of this poem?',
-        choices: ['XLVI', 'Viraha', 'Halaga', 'Haraya'],
+        choices: ['Viraha', 'Haraya', 'XLVI', 'Halaga'],
         correct: 'XLVI'
     },
     {
@@ -43,9 +43,9 @@ that only silence knows.`,
         excerpt:
             `Hindi sa laki ng regalo nasusukat ang pagmamahal,
 kundi sa tibok ng pusong handang magbigay
-ng kahit kaunti — basta\'t bukal sa loob.`,
+ng kahit kaunti — basta't bukal sa loob.`,
         question: 'What is the title of this poem?',
-        choices: ['Halaga', 'Haraya', 'XLVI', 'Viraha'],
+        choices: ['Halaga', 'XLVI', 'Haraya', 'Viraha'],
         correct: 'Halaga'
     },
     {
@@ -53,10 +53,10 @@ ng kahit kaunti — basta\'t bukal sa loob.`,
         excerpt:
             `Sa bawat guni-guni, ikaw ang bida.
 Sa bawat panaginip, ikaw ang tula.
-Ang haraya ko\'y walang hangganan —
+Ang haraya ko'y walang hangganan —
 ikaw ang simula, ikaw ang dulo.`,
         question: 'What is the title of this poem?',
-        choices: ['Haraya', 'Halaga', 'Viraha', 'Mamihlapinatapai'],
+        choices: ['Mamihlapinatapai', 'Viraha', 'Halaga', 'Haraya'],
         correct: 'Haraya'
     },
     {
@@ -67,7 +67,7 @@ isang kundiman para sa pusong
 naghahanap ng liwanag
 sa mata ng minamahal.`,
         question: 'What is the title of this poem?',
-        choices: ['Kundiman sa Gitna ng Dilim', 'Haraya', 'Halaga', 'XLVI'],
+        choices: ['Kundiman sa Gitna ng Dilim', 'Halaga', 'Haraya', 'XLVI'],
         correct: 'Kundiman sa Gitna ng Dilim'
     },
     {
@@ -79,7 +79,7 @@ isang agham na walang pormula,
 isang teorya na hindi kayang patunayan
 ng kahit anong laboratoryo.`,
         question: 'What is the title of this poem?',
-        choices: ['Ang Agham ng Iyong Ngiti', 'Kundiman sa Gitna ng Dilim', 'Viraha', 'XLVI'],
+        choices: ['Viraha', 'Kundiman sa Gitna ng Dilim', 'Ang Agham ng Iyong Ngiti', 'Haraya'],
         correct: 'Ang Agham ng Iyong Ngiti'
     }
 ];

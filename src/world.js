@@ -4,7 +4,7 @@ export function createWorld(scene) {
     const world = new THREE.Group();
     scene.add(world);
 
-    scene.fog = new THREE.FogExp2(0x1a1030, 0.018);
+    scene.fog = new THREE.FogExp2(0x2a1a4a, 0.012);
 
     const groundGeo = new THREE.PlaneGeometry(400, 400, 64, 64);
     const positions = groundGeo.attributes.position;
@@ -16,7 +16,7 @@ export function createWorld(scene) {
     }
     groundGeo.computeVertexNormals();
     const groundMat = new THREE.MeshStandardMaterial({
-        color: 0x2e4a2a,
+        color: 0x3e5a3a,
         roughness: 0.95,
         metalness: 0.05,
         flatShading: true
@@ -26,9 +26,10 @@ export function createWorld(scene) {
     ground.receiveShadow = true;
     world.add(ground);
 
+    // Grass
     const bladeGeo = new THREE.ConeGeometry(0.08, 0.6, 3);
-    const bladeMat = new THREE.MeshStandardMaterial({ color: 0x4a7a3a, roughness: 1 });
-    const grassCount = 3000;
+    const bladeMat = new THREE.MeshStandardMaterial({ color: 0x5a8a4a, roughness: 1 });
+    const grassCount = 2500;
     const grass = new THREE.InstancedMesh(bladeGeo, bladeMat, grassCount);
     const dummy = new THREE.Object3D();
     for (let i = 0; i < grassCount; i++) {
@@ -45,30 +46,40 @@ export function createWorld(scene) {
     }
     world.add(grass);
 
+    // Collision objects (with radius for player collision)
+    const collidables = [];
+
+    // Trees
     for (let i = 0; i < 40; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const radius = 25 + Math.random() * 70;
+        const radius = 20 + Math.random() * 70;
         const x = Math.cos(angle) * radius;
         const z = Math.sin(angle) * radius;
         const y = Math.sin(x * 0.05) * Math.cos(z * 0.05) * 1.5;
-        world.add(createTree(x, y, z));
+        const tree = createTree(x, y, z);
+        world.add(tree);
+        collidables.push({ x, z, radius: 1.2 });
     }
 
+    // Rocks
     for (let i = 0; i < 30; i++) {
         const angle = Math.random() * Math.PI * 2;
         const radius = 15 + Math.random() * 80;
         const x = Math.cos(angle) * radius;
         const z = Math.sin(angle) * radius;
         const y = Math.sin(x * 0.05) * Math.cos(z * 0.05) * 1.5;
-        const rockGeo = new THREE.DodecahedronGeometry(0.5 + Math.random() * 0.8, 0);
-        const rockMat = new THREE.MeshStandardMaterial({ color: 0x554466, roughness: 0.9, flatShading: true });
+        const size = 0.5 + Math.random() * 0.8;
+        const rockGeo = new THREE.DodecahedronGeometry(size, 0);
+        const rockMat = new THREE.MeshStandardMaterial({ color: 0x665577, roughness: 0.9, flatShading: true });
         const rock = new THREE.Mesh(rockGeo, rockMat);
-        rock.position.set(x, y + 0.3, z);
+        rock.position.set(x, y + size * 0.5, z);
         rock.rotation.set(Math.random(), Math.random(), Math.random());
         rock.castShadow = true;
         world.add(rock);
+        collidables.push({ x, z, radius: size });
     }
 
+    // Glowing flowers
     for (let i = 0; i < 60; i++) {
         const angle = Math.random() * Math.PI * 2;
         const radius = 5 + Math.random() * 90;
@@ -83,25 +94,30 @@ export function createWorld(scene) {
         );
         flower.position.set(x, y + 0.3, z);
         world.add(flower);
-        const light = new THREE.PointLight(c, 0.4, 4);
+        const light = new THREE.PointLight(c, 0.5, 5);
         light.position.copy(flower.position);
         world.add(light);
     }
 
-    return { world, ground, getGroundHeight: (x, z) => Math.sin(x * 0.05) * Math.cos(z * 0.05) * 1.5 };
+    return {
+        world,
+        ground,
+        collidables,
+        getGroundHeight: (x, z) => Math.sin(x * 0.05) * Math.cos(z * 0.05) * 1.5
+    };
 }
 
 function createTree(x, y, z) {
     const group = new THREE.Group();
     const trunk = new THREE.Mesh(
         new THREE.CylinderGeometry(0.3, 0.5, 4, 6),
-        new THREE.MeshStandardMaterial({ color: 0x3a2418, roughness: 1, flatShading: true })
+        new THREE.MeshStandardMaterial({ color: 0x4a3428, roughness: 1, flatShading: true })
     );
     trunk.position.y = 2;
     trunk.castShadow = true;
     group.add(trunk);
 
-    const foliageMat = new THREE.MeshStandardMaterial({ color: 0x3d6b3d, roughness: 1, flatShading: true });
+    const foliageMat = new THREE.MeshStandardMaterial({ color: 0x4d7b4d, roughness: 1, flatShading: true });
     for (let i = 0; i < 3; i++) {
         const foliage = new THREE.Mesh(
             new THREE.IcosahedronGeometry(1.6 - i * 0.3, 0),
@@ -121,18 +137,20 @@ function createTree(x, y, z) {
 
 export function createPoemOrbs(scene, puzzles, getGroundHeight) {
     const orbs = [];
-    const colors = [0xc9a0ff, 0xffb3d9, 0xa0d8ff, 0xffe0a0, 0xb0ffd0];
+    const colors = [0xc9a0ff, 0xffb3d9, 0xa0d8ff, 0xffe0a0, 0xb0ffd0, 0xff9aa0, 0xa0ffb0];
 
     const positions = [
         { x: 20, z: -15 },
         { x: -30, z: 25 },
         { x: 40, z: 30 },
         { x: -25, z: -35 },
-        { x: 0, z: 55 }
+        { x: 0, z: 55 },
+        { x: -50, z: -10 },
+        { x: 55, z: -40 }
     ];
 
     puzzles.forEach((p, i) => {
-        const pos = positions[i];
+        const pos = positions[i] || { x: 0, z: 0 };
         const y = getGroundHeight(pos.x, pos.z);
 
         const group = new THREE.Group();
@@ -145,13 +163,13 @@ export function createPoemOrbs(scene, puzzles, getGroundHeight) {
         const shellMat = new THREE.MeshBasicMaterial({
             color: colors[i % colors.length],
             transparent: true,
-            opacity: 0.25,
+            opacity: 0.3,
             wireframe: true
         });
         const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(0.9, 1), shellMat);
         group.add(shell);
 
-        const light = new THREE.PointLight(colors[i % colors.length], 2, 12);
+        const light = new THREE.PointLight(colors[i % colors.length], 2, 15);
         group.add(light);
 
         group.userData = {
@@ -273,144 +291,132 @@ export function createFlower() {
     group.add(light);
 
     return group;
-
 }
-// ==== IDAGDAG MO ITO SA DULO NG src/world.js ====
 
 export function createRainbow() {
-  const group = new THREE.Group();
-  const colors = [0xff0000, 0xff7700, 0xffff00, 0x00ff00, 0x0088ff, 0x4400ff, 0x8800ff];
-  const radiusBase = 30;
+    const group = new THREE.Group();
+    const colors = [0xff0000, 0xff7700, 0xffff00, 0x00ff00, 0x0088ff, 0x4400ff, 0x8800ff];
+    const radiusBase = 30;
 
-  colors.forEach((color, i) => {
-    const radius = radiusBase + i * 0.8;
-    const curve = new THREE.EllipseCurve(
-      0, 0,
-      radius, radius,
-      Math.PI, 0, // top half only
-      false,
-      0
-    );
-    const points = curve.getPoints(50);
-    const geometry = new THREE.BufferGeometry().setFromPoints(
-      points.map(p => new THREE.Vector3(p.x, p.y, 0))
-    );
-    const material = new THREE.LineBasicMaterial({
-      color: color,
-      transparent: true,
-      opacity: 0.5
+    colors.forEach((color, i) => {
+        const radius = radiusBase + i * 0.8;
+        const curve = new THREE.EllipseCurve(0, 0, radius, radius, Math.PI, 0, false, 0);
+        const points = curve.getPoints(50);
+        const geometry = new THREE.BufferGeometry().setFromPoints(
+            points.map(p => new THREE.Vector3(p.x, p.y, 0))
+        );
+        const material = new THREE.LineBasicMaterial({
+            color: color,
+            transparent: true,
+            opacity: 0.6
+        });
+        const arc = new THREE.Line(geometry, material);
+        group.add(arc);
     });
-    const arc = new THREE.Line(geometry, material);
-    group.add(arc);
-  });
 
-  return group;
+    return group;
 }
 
 export function createButterflies(count = 30) {
-  const group = new THREE.Group();
-  const butterflies = [];
+    const group = new THREE.Group();
+    const butterflies = [];
 
-  for (let i = 0; i < count; i++) {
-    const bf = new THREE.Group();
+    for (let i = 0; i < count; i++) {
+        const bf = new THREE.Group();
+        const colors = [0xff69b4, 0xffa500, 0xffe066, 0xc9a0ff, 0x87ceeb];
+        const color = colors[Math.floor(Math.random() * colors.length)];
 
-    const colors = [0xff69b4, 0xffa500, 0xffe066, 0xc9a0ff, 0x87ceeb];
-    const color = colors[Math.floor(Math.random() * colors.length)];
+        const wingMat = new THREE.MeshBasicMaterial({
+            color: color,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.9
+        });
 
-    const wingMat = new THREE.MeshBasicMaterial({
-      color: color,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.9
-    });
+        const wingL = new THREE.Mesh(new THREE.CircleGeometry(0.15, 8), wingMat);
+        wingL.position.x = -0.1;
+        bf.add(wingL);
 
-    const wingL = new THREE.Mesh(new THREE.CircleGeometry(0.15, 8), wingMat);
-    wingL.position.x = -0.1;
-    bf.add(wingL);
+        const wingR = new THREE.Mesh(new THREE.CircleGeometry(0.15, 8), wingMat);
+        wingR.position.x = 0.1;
+        bf.add(wingR);
 
-    const wingR = new THREE.Mesh(new THREE.CircleGeometry(0.15, 8), wingMat);
-    wingR.position.x = 0.1;
-    bf.add(wingR);
+        bf.userData = {
+            wingL, wingR,
+            phase: Math.random() * Math.PI * 2,
+            speed: 0.5 + Math.random() * 1,
+            radius: 5 + Math.random() * 25,
+            height: 2 + Math.random() * 6,
+            angle: Math.random() * Math.PI * 2,
+            centerX: (Math.random() - 0.5) * 20,
+            centerZ: -20 - Math.random() * 40
+        };
 
-    bf.userData = {
-      wingL, wingR,
-      phase: Math.random() * Math.PI * 2,
-      speed: 0.5 + Math.random() * 1,
-      radius: 5 + Math.random() * 25,
-      height: 2 + Math.random() * 6,
-      angle: Math.random() * Math.PI * 2,
-      centerX: (Math.random() - 0.5) * 20,
-      centerZ: -20 - Math.random() * 40
-    };
-
-    group.add(bf);
-    butterflies.push(bf);
-  }
-
-  return {
-    group,
-    update: (dt) => {
-      butterflies.forEach(bf => {
-        const u = bf.userData;
-        u.angle += dt * u.speed;
-        bf.position.x = u.centerX + Math.cos(u.angle) * u.radius;
-        bf.position.z = u.centerZ + Math.sin(u.angle) * u.radius;
-        bf.position.y = u.height + Math.sin(u.angle * 3) * 0.5;
-
-        // Flap wings
-        const flap = Math.sin(performance.now() * 0.01 + u.phase) * 0.8;
-        u.wingL.rotation.y = flap;
-        u.wingR.rotation.y = -flap;
-      });
+        group.add(bf);
+        butterflies.push(bf);
     }
-  };
+
+    return {
+        group,
+        update: (dt) => {
+            butterflies.forEach(bf => {
+                const u = bf.userData;
+                u.angle += dt * u.speed;
+                bf.position.x = u.centerX + Math.cos(u.angle) * u.radius;
+                bf.position.z = u.centerZ + Math.sin(u.angle) * u.radius;
+                bf.position.y = u.height + Math.sin(u.angle * 3) * 0.5;
+
+                const flap = Math.sin(performance.now() * 0.01 + u.phase) * 0.8;
+                u.wingL.rotation.y = flap;
+                u.wingR.rotation.y = -flap;
+            });
+        }
+    };
 }
 
 export function createBirds(count = 12) {
-  const group = new THREE.Group();
-  const birds = [];
+    const group = new THREE.Group();
+    const birds = [];
 
-  for (let i = 0; i < count; i++) {
-    const bird = new THREE.Group();
+    for (let i = 0; i < count; i++) {
+        const bird = new THREE.Group();
+        const mat = new THREE.MeshBasicMaterial({ color: 0x222222, side: THREE.DoubleSide });
+        const wingL = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.15), mat);
+        wingL.position.x = -0.3;
+        bird.add(wingL);
+        const wingR = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.15), mat);
+        wingR.position.x = 0.3;
+        bird.add(wingR);
 
-    const mat = new THREE.MeshBasicMaterial({ color: 0x222222, side: THREE.DoubleSide });
-    const wingL = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.15), mat);
-    wingL.position.x = -0.3;
-    bird.add(wingL);
-    const wingR = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.15), mat);
-    wingR.position.x = 0.3;
-    bird.add(wingR);
+        bird.userData = {
+            wingL, wingR,
+            phase: Math.random() * Math.PI * 2,
+            speed: 0.3 + Math.random() * 0.4,
+            radius: 30 + Math.random() * 40,
+            height: 12 + Math.random() * 10,
+            angle: Math.random() * Math.PI * 2,
+            centerZ: -50
+        };
 
-    bird.userData = {
-      wingL, wingR,
-      phase: Math.random() * Math.PI * 2,
-      speed: 0.3 + Math.random() * 0.4,
-      radius: 30 + Math.random() * 40,
-      height: 12 + Math.random() * 10,
-      angle: Math.random() * Math.PI * 2,
-      centerZ: -50
-    };
-
-    group.add(bird);
-    birds.push(bird);
-  }
-
-  return {
-    group,
-    update: (dt) => {
-      birds.forEach(bird => {
-        const u = bird.userData;
-        u.angle += dt * u.speed * 0.3;
-        bird.position.x = Math.cos(u.angle) * u.radius;
-        bird.position.z = u.centerZ + Math.sin(u.angle) * u.radius * 0.5;
-        bird.position.y = u.height + Math.sin(u.angle * 2) * 1;
-
-        bird.rotation.y = -u.angle + Math.PI / 2;
-
-        const flap = Math.sin(performance.now() * 0.008 + u.phase) * 0.6;
-        u.wingL.rotation.z = flap;
-        u.wingR.rotation.z = -flap;
-      });
+        group.add(bird);
+        birds.push(bird);
     }
-  };
+
+    return {
+        group,
+        update: (dt) => {
+            birds.forEach(bird => {
+                const u = bird.userData;
+                u.angle += dt * u.speed * 0.3;
+                bird.position.x = Math.cos(u.angle) * u.radius;
+                bird.position.z = u.centerZ + Math.sin(u.angle) * u.radius * 0.5;
+                bird.position.y = u.height + Math.sin(u.angle * 2) * 1;
+                bird.rotation.y = -u.angle + Math.PI / 2;
+
+                const flap = Math.sin(performance.now() * 0.008 + u.phase) * 0.6;
+                u.wingL.rotation.z = flap;
+                u.wingR.rotation.z = -flap;
+            });
+        }
+    };
 }

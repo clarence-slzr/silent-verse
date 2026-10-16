@@ -1,7 +1,29 @@
 import * as THREE from 'three';
 import { audio } from './audio.js';
 import { PUZZLES, FINAL_POEM_URL } from './puzzles.js';
-import { createWorld, createPoemOrbs, createCharacter, createFlower, createRainbow, createButterflies, createBirds } from './world.js';
+import {
+    createWorld,
+    createPoemOrbs,
+    createCharacter,
+    createFlower,
+    createRainbow,
+    createButterflies,
+    createBirds
+} from './world.js';
+
+// Floating notes that pop up as you walk
+const WALKING_NOTES = [
+    'The valley remembers every step...',
+    'A poem waits nearby.',
+    'Listen to the whisper of the wind.',
+    'Two souls await each other.',
+    'Every riddle is a doorway.',
+    'Light bends where love lingers.',
+    'The sunset is closer than you think.',
+    'Silence speaks in verses.',
+    'You are not alone here.',
+    'Follow the glow.',
+];
 
 export class Game {
     constructor() {
@@ -16,26 +38,26 @@ export class Game {
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 1.1;
+        this.renderer.toneMappingExposure = 1.2;
 
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x1a1030);
+        this.scene.background = new THREE.Color(0x2a1a4a);
 
-        // First-person camera
         this.camera = new THREE.PerspectiveCamera(
-            75,
+            65,
             window.innerWidth / window.innerHeight,
             0.1,
             500
         );
 
-        const ambient = new THREE.AmbientLight(0x403060, 0.9);
+        // Lighting
+        const ambient = new THREE.AmbientLight(0x8060a0, 1.0);
         this.scene.add(ambient);
 
-        const hemi = new THREE.HemisphereLight(0xc9a0ff, 0x1a2a1a, 0.7);
+        const hemi = new THREE.HemisphereLight(0xc9a0ff, 0x2a3a2a, 0.8);
         this.scene.add(hemi);
 
-        this.sun = new THREE.DirectionalLight(0xffd8a0, 1.2);
+        this.sun = new THREE.DirectionalLight(0xffd8a0, 1.4);
         this.sun.position.set(60, 80, 40);
         this.sun.castShadow = true;
         this.sun.shadow.mapSize.set(2048, 2048);
@@ -46,28 +68,43 @@ export class Game {
         this.sun.shadow.camera.far = 300;
         this.scene.add(this.sun);
 
+        // World
         const worldData = createWorld(this.scene);
         this.getGroundHeight = worldData.getGroundHeight;
+        this.collidables = worldData.collidables;
 
-        this.gender = null;
-        this.player = null;
-
+        // Orbs
         this.orbs = createPoemOrbs(this.scene, PUZZLES, this.getGroundHeight);
         this.collectedCount = 0;
 
+        // State
+        this.gender = null;
+        this.player = null;
         this.partner = null;
-        this.rainbow = null;
-        this.butterflies = null;
-        this.birds = null;
-
         this.keys = {};
-        this.cameraAngle = { yaw: 0, pitch: 0 };
+        this.cameraAngle = { yaw: 0, pitch: -0.25 };
+        this.cameraDistance = 7;
         this.isRunning = false;
         this.nearOrb = null;
         this.puzzleActive = false;
         this.ended = false;
         this.endingMode = false;
 
+        // Physics
+        this.velocityY = 0;
+        this.isJumping = false;
+        this.groundY = 0;
+
+        // Click-to-move
+        this.moveTarget = null;
+        this.moveMarker = null;
+
+        // Notes
+        this.noteTimer = 0;
+        this.nextNoteTime = 8;
+        this.notesContainer = document.getElementById('notes-container');
+
+        // UI
         this.counterEl = document.getElementById('counter');
         this.puzzleModal = document.getElementById('puzzle-modal');
         this.puzzlePoem = document.getElementById('puzzle-poem');
@@ -75,6 +112,7 @@ export class Game {
         this.puzzleChoices = document.getElementById('puzzle-choices');
         this.puzzleFeedback = document.getElementById('puzzle-feedback');
         this.interactPrompt = document.getElementById('interact-prompt');
+        this.interactText = document.getElementById('interact-text');
 
         this.bindEvents();
         this.animate();
@@ -82,10 +120,9 @@ export class Game {
 
     start(gender) {
         this.gender = gender;
-        // Create the player (body visible only in ending)
         this.player = createCharacter(this.scene, gender);
         this.player.position.set(0, this.getGroundHeight(0, 0), 0);
-        this.player.visible = false; // POV — hide own body
+        this.groundY = this.player.position.y;
         audio.startBg();
     }
 
@@ -96,10 +133,16 @@ export class Game {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
+        // Keyboard
         window.addEventListener('keydown', (e) => {
-            this.keys[e.key.toLowerCase()] = true;
+            const k = e.key.toLowerCase();
+            this.keys[k] = true;
             if (e.key === 'Shift') this.isRunning = true;
-            if (e.key.toLowerCase() === 'e' && this.nearOrb && !this.puzzleActive && !this.ended) {
+            if (e.key === ' ' && this.player && !this.puzzleActive && !this.ended) {
+                this.jump();
+                e.preventDefault();
+            }
+            if (k === 'e' && this.nearOrb && !this.puzzleActive && !this.ended) {
                 this.openPuzzle(this.nearOrb);
             }
         });
@@ -109,67 +152,127 @@ export class Game {
             if (e.key === 'Shift') this.isRunning = false;
         });
 
-        this.canvas.addEventListener('click', () => {
+        // Mouse look via pointer lock (desktop)
+        this.canvas.addEventListener('click', (e) => {
             if (this.puzzleActive || this.ended) return;
-            if (!document.pointerLockElement && this.player) {
-                this.canvas.requestPointerLock();
-            }
-            if (this.nearOrb && !this.puzzleActive) {
+
+            // If we have an orb nearby, open puzzle
+            if (this.nearOrb) {
                 this.openPuzzle(this.nearOrb);
+                return;
+            }
+
+            // On mobile or if not pointer locked, use click-to-move
+            const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            if (isMobile) {
+                this.setMoveTarget(e.clientX, e.clientY);
+                return;
+            }
+
+            // Desktop: try pointer lock
+            if (!document.pointerLockElement) {
+                this.canvas.requestPointerLock();
+            } else {
+                // If already locked, still allow click-to-move via center raycast? Simpler: ignore.
             }
         });
 
         document.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement === this.canvas) {
-                this.cameraAngle.yaw -= e.movementX * 0.0022;
-                this.cameraAngle.pitch -= e.movementY * 0.0022;
-                this.cameraAngle.pitch = Math.max(-1.2, Math.min(1.2, this.cameraAngle.pitch));
+                this.cameraAngle.yaw -= e.movementX * 0.0025;
+                this.cameraAngle.pitch -= e.movementY * 0.0025;
+                this.cameraAngle.pitch = Math.max(-0.9, Math.min(0.3, this.cameraAngle.pitch));
             }
         });
 
+        // Touch controls for mobile
+        this.canvas.addEventListener('touchstart', (e) => {
+            if (this.puzzleActive || this.ended) return;
+            const touch = e.touches[0];
+            if (this.nearOrb) {
+                this.openPuzzle(this.nearOrb);
+                return;
+            }
+            this.setMoveTarget(touch.clientX, touch.clientY);
+        }, { passive: true });
+
+        // Jump button
+        const jumpBtn = document.getElementById('jump-btn');
+        if (jumpBtn) {
+            jumpBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                this.jump();
+            });
+            jumpBtn.addEventListener('click', () => this.jump());
+        }
+
+        // Puzzle close
         document.getElementById('close-puzzle').addEventListener('click', () => this.closePuzzle());
 
-        document.getElementById('restart-btn').addEventListener('click', () => {
-            location.reload();
-        });
-
-        // Ending popup button
+        // Ending final button
         const finalBtn = document.getElementById('final-poem-btn');
         if (finalBtn) {
             finalBtn.addEventListener('click', () => {
                 window.open(FINAL_POEM_URL, '_blank');
             });
         }
+
+        document.getElementById('restart-btn').addEventListener('click', () => {
+            location.reload();
+        });
     }
 
-    updateCamera(dt) {
-        if (!this.player || this.endingMode) return;
+    setMoveTarget(clientX, clientY) {
+        if (!this.player || !this.camera) return;
+        const rect = this.canvas.getBoundingClientRect();
+        const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
+        const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1;
 
-        // First-person: camera is at eye-level of player
-        const eyeHeight = this.player.position.y + 1.7;
-        this.camera.position.set(
-            this.player.position.x,
-            eyeHeight,
-            this.player.position.z
-        );
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this.camera);
 
-        // Look direction based on yaw/pitch
-        const dir = new THREE.Vector3(
-            -Math.sin(this.cameraAngle.yaw) * Math.cos(this.cameraAngle.pitch),
-            Math.sin(this.cameraAngle.pitch),
-            -Math.cos(this.cameraAngle.yaw) * Math.cos(this.cameraAngle.pitch)
-        );
-        this.camera.lookAt(
-            this.camera.position.x + dir.x,
-            this.camera.position.y + dir.y,
-            this.camera.position.z + dir.z
-        );
+        // Intersect with ground plane at y = groundY
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.groundY);
+        const point = new THREE.Vector3();
+        if (raycaster.ray.intersectPlane(plane, point)) {
+            this.moveTarget = point;
+            this.showMoveMarker(point);
+        }
+    }
+
+    showMoveMarker(pos) {
+        if (!this.moveMarker) {
+            const geo = new THREE.RingGeometry(0.4, 0.6, 32);
+            const mat = new THREE.MeshBasicMaterial({
+                color: 0xc9a0ff,
+                transparent: true,
+                opacity: 0.8,
+                side: THREE.DoubleSide
+            });
+            this.moveMarker = new THREE.Mesh(geo, mat);
+            this.moveMarker.rotation.x = -Math.PI / 2;
+            this.scene.add(this.moveMarker);
+        }
+        this.moveMarker.position.set(pos.x, this.getGroundHeight(pos.x, pos.z) + 0.05, pos.z);
+        this.moveMarker.visible = true;
+
+        // Fade out
+        clearTimeout(this._markerTimeout);
+        this._markerTimeout = setTimeout(() => {
+            if (this.moveMarker) this.moveMarker.visible = false;
+        }, 1500);
+    }
+
+    jump() {
+        if (!this.player || this.isJumping) return;
+        this.velocityY = 8;
+        this.isJumping = true;
     }
 
     updatePlayer(dt) {
         if (!this.player || this.puzzleActive || this.ended) return;
 
-        const speed = this.isRunning ? 14 : 7;
+        const speed = this.isRunning ? 12 : 6;
         const forward = new THREE.Vector3(
             -Math.sin(this.cameraAngle.yaw),
             0,
@@ -181,21 +284,101 @@ export class Game {
             Math.sin(this.cameraAngle.yaw)
         );
 
-        const move = new THREE.Vector3();
+        let move = new THREE.Vector3();
+
+        // Keyboard input
         if (this.keys['w'] || this.keys['arrowup']) move.add(forward);
         if (this.keys['s'] || this.keys['arrowdown']) move.sub(forward);
         if (this.keys['a'] || this.keys['arrowleft']) move.sub(right);
         if (this.keys['d'] || this.keys['arrowright']) move.add(right);
 
+        // Click-to-move
+        if (move.length() === 0 && this.moveTarget) {
+            const dir = new THREE.Vector3(
+                this.moveTarget.x - this.player.position.x,
+                0,
+                this.moveTarget.z - this.player.position.z
+            );
+            if (dir.length() > 0.5) {
+                move = dir.normalize();
+            } else {
+                this.moveTarget = null;
+            }
+        }
+
         if (move.length() > 0) {
             move.normalize();
             const next = this.player.position.clone().addScaledVector(move, speed * dt);
-            const maxR = 95;
-            if (next.length() < maxR) {
+
+            // Collision check
+            let blocked = false;
+            for (const c of this.collidables) {
+                const dx = next.x - c.x;
+                const dz = next.z - c.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                if (dist < c.radius + 0.4) {
+                    blocked = true;
+                    break;
+                }
+            }
+
+            if (!blocked) {
                 next.y = this.getGroundHeight(next.x, next.z);
-                this.player.position.copy(next);
+                const maxR = 95;
+                if (next.length() < maxR) {
+                    this.player.position.x = next.x;
+                    this.player.position.z = next.z;
+                    const targetRot = Math.atan2(move.x, move.z);
+                    this.player.rotation.y = this.lerpAngle(this.player.rotation.y, targetRot, 0.15);
+                }
             }
         }
+
+        // Vertical physics (jump)
+        const groundY = this.getGroundHeight(this.player.position.x, this.player.position.z);
+        this.groundY = groundY;
+
+        if (this.isJumping) {
+            this.player.position.y += this.velocityY * dt;
+            this.velocityY -= 20 * dt;
+            if (this.player.position.y <= groundY) {
+                this.player.position.y = groundY;
+                this.isJumping = false;
+                this.velocityY = 0;
+            }
+        } else {
+            this.player.position.y = groundY;
+        }
+
+        // Walking animation
+        const t = performance.now() * 0.005;
+        if (move.length() > 0) {
+            this.player.userData.leftArm.rotation.x = Math.sin(t) * 0.4;
+            this.player.userData.rightArm.rotation.x = -Math.sin(t) * 0.4;
+        } else {
+            this.player.userData.leftArm.rotation.x *= 0.9;
+            this.player.userData.rightArm.rotation.x *= 0.9;
+        }
+    }
+
+    lerpAngle(a, b, t) {
+        let diff = b - a;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        return a + diff * t;
+    }
+
+    updateCamera(dt) {
+        if (!this.player || this.endingMode) return;
+
+        const targetY = this.player.position.y + 1.6;
+        const dist = this.cameraDistance;
+        const camX = this.player.position.x + Math.sin(this.cameraAngle.yaw) * dist * Math.cos(this.cameraAngle.pitch);
+        const camZ = this.player.position.z + Math.cos(this.cameraAngle.yaw) * dist * Math.cos(this.cameraAngle.pitch);
+        const camY = targetY + 2 + Math.sin(this.cameraAngle.pitch) * dist;
+
+        this.camera.position.lerp(new THREE.Vector3(camX, camY, camZ), 1 - Math.pow(0.001, dt));
+        this.camera.lookAt(this.player.position.x, targetY, this.player.position.z);
     }
 
     updateOrbs(dt) {
@@ -223,10 +406,21 @@ export class Game {
         if (this.nearOrb && !this.puzzleActive && !this.ended) {
             this.interactPrompt.classList.add('show');
             const idx = this.nearOrb.userData.index;
-            this.interactPrompt.innerHTML = `Press <b>E</b> or <b>Click</b> to read Poem #${idx + 1}`;
+            this.interactText.innerHTML = `Press <b>E</b> or <b>Tap</b> to read Poem #${idx + 1}`;
         } else {
             this.interactPrompt.classList.remove('show');
         }
+    }
+
+    spawnNote() {
+        const text = WALKING_NOTES[Math.floor(Math.random() * WALKING_NOTES.length)];
+        const note = document.createElement('div');
+        note.className = 'note';
+        note.textContent = text;
+        this.notesContainer.appendChild(note);
+        setTimeout(() => {
+            if (note.parentNode) note.parentNode.removeChild(note);
+        }, 4200);
     }
 
     openPuzzle(orb) {
@@ -242,13 +436,13 @@ export class Game {
         this.puzzleFeedback.textContent = '';
         this.puzzleFeedback.className = 'feedback';
 
-        // Build multiple choice buttons
+        // Build A/B/C/D buttons
         this.puzzleChoices.innerHTML = '';
-        const shuffled = [...p.choices].sort(() => Math.random() - 0.5);
-        shuffled.forEach((choice) => {
+        const letters = ['A', 'B', 'C', 'D'];
+        p.choices.forEach((choice, i) => {
             const btn = document.createElement('button');
             btn.className = 'choice-option';
-            btn.textContent = choice;
+            btn.innerHTML = `<span class="choice-letter">${letters[i]}</span><span>${choice}</span>`;
             btn.addEventListener('click', () => this.checkAnswer(choice, btn));
             this.puzzleChoices.appendChild(btn);
         });
@@ -265,7 +459,6 @@ export class Game {
             this.puzzleFeedback.textContent = '✨ Correct! The poem fades into light.';
             this.puzzleFeedback.className = 'feedback ok';
             audio.correct();
-            // Disable all buttons
             this.puzzleChoices.querySelectorAll('button').forEach(b => b.disabled = true);
             setTimeout(() => this.solvePuzzle(this.currentOrb), 900);
         } else {
@@ -311,10 +504,8 @@ export class Game {
         this.endingMode = true;
         this.interactPrompt.classList.remove('show');
 
-        // Position player and partner side by side, both facing sunset (POV)
         const endX = 0, endZ = 0;
         this.player.position.set(endX - 0.7, this.getGroundHeight(endX - 0.7, endZ), endZ);
-        this.player.visible = true;
         this.player.rotation.y = 0;
 
         const partnerGender = this.gender === 'male' ? 'female' : 'male';
@@ -322,19 +513,12 @@ export class Game {
         this.partner.position.set(endX + 0.7, this.getGroundHeight(endX + 0.7, endZ), endZ);
         this.partner.rotation.y = 0;
 
-        // Flower
         this.flower = createFlower();
         this.flower.position.set(0, this.getGroundHeight(0, -1.5) + 1, -1.5);
         this.flower.visible = false;
         this.scene.add(this.flower);
 
-        // Cinematic: camera behind characters looking at sunset
         this.animateSunset();
-
-        // Set camera to look forward (towards sunset at -Z)
-        this.cameraAngle.yaw = 0;
-        this.cameraAngle.pitch = 0;
-        this.endingCameraDist = 6;
 
         setTimeout(() => {
             this.flower.visible = true;
@@ -343,34 +527,28 @@ export class Game {
             this.spawnEndingEffects();
         }, 3000);
 
-        // Show final popup after sunset
-        setTimeout(() => this.showEndingUI(), 8000);
+        setTimeout(() => this.showEndingUI(), 7000);
     }
 
     spawnEndingEffects() {
-        // Rainbow
         this.rainbow = createRainbow();
         this.rainbow.position.set(0, 20, -80);
         this.scene.add(this.rainbow);
 
-        // Butterflies
         this.butterflies = createButterflies(30);
         this.scene.add(this.butterflies.group);
 
-        // Birds
         this.birds = createBirds(12);
         this.scene.add(this.birds.group);
     }
 
     animateSunset() {
-        const startBg = new THREE.Color(0x1a1030);
+        const startBg = new THREE.Color(0x2a1a4a);
         const endBg = new THREE.Color(0xffb080);
         const startSun = new THREE.Color(0xffd8a0);
         const endSun = new THREE.Color(0xff8060);
         const startPos = this.sun.position.clone();
         const endPos = new THREE.Vector3(-100, 15, -120);
-        const startAmbient = 0.9;
-        const endAmbient = 1.6;
 
         const duration = 6000;
         const start = performance.now();
@@ -383,7 +561,7 @@ export class Game {
             this.scene.fog.color.copy(startBg).lerp(endBg, ease);
             this.sun.color.copy(startSun).lerp(endSun, ease);
             this.sun.position.lerpVectors(startPos, endPos, ease);
-            this.sun.intensity = 1.2 + ease * 0.8;
+            this.sun.intensity = 1.4 + ease * 0.6;
 
             if (t < 1) requestAnimationFrame(animate);
         };
@@ -414,13 +592,11 @@ export class Game {
     updateEndingCamera(dt) {
         if (!this.endingMode || !this.player) return;
 
-        // Cinematic: pull back and show both characters from behind
-        const midX = (this.player.position.x + (this.partner?.position.x || 0)) / 2;
-        const midZ = (this.player.position.z + (this.partner?.position.z || 0)) / 2;
-
+        const midX = this.player.position.x;
+        const midZ = this.player.position.z;
         const targetX = midX;
-        const targetZ = midZ + this.endingCameraDist;
-        const targetY = this.getGroundHeight(midX, midZ) + 2.5;
+        const targetZ = midZ + 6;
+        const targetY = this.getGroundHeight(midX, midZ) + 3;
 
         this.camera.position.lerp(new THREE.Vector3(targetX, targetY, targetZ), 1 - Math.pow(0.001, dt));
         this.camera.lookAt(midX, this.getGroundHeight(midX, midZ) + 1.5, midZ - 30);
@@ -439,10 +615,17 @@ export class Game {
                 this.updatePlayer(dt);
                 this.updateCamera(dt);
                 this.updateOrbs(dt);
+
+                // Floating notes timer
+                this.noteTimer += dt;
+                if (this.noteTimer > this.nextNoteTime && !this.ended && !this.puzzleActive) {
+                    this.noteTimer = 0;
+                    this.nextNoteTime = 8 + Math.random() * 6;
+                    this.spawnNote();
+                }
             }
         }
 
-        // Animate butterflies and birds
         if (this.butterflies) this.butterflies.update(dt);
         if (this.birds) this.birds.update(dt);
 

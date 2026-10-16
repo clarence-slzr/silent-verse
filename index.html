@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="tl">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Silent Verse — Isang Tula ng Misteryo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Silent Verse — A Poem of Mystery</title>
     <link rel="stylesheet" href="/src/style.css" />
 </head>
 
@@ -12,37 +12,52 @@
     <div id="app">
         <canvas id="scene"></canvas>
 
+        <!-- HUD -->
         <div id="hud">
-            <div id="objective">Layunin: Maghanap ng mga Tula ng Misteryo</div>
-            <div id="counter">Nahanap: 0 / 5</div>
-            <div id="controls-hint">WASD = Galaw | Mouse = Tingin | Click = Interact | Shift = Takbo</div>
+            <div id="objective">Objective: Find Mystery Poems</div>
+            <div id="counter">Found: 0 / 7</div>
         </div>
 
+        <!-- Floating notes (Getting Over It style) -->
+        <div id="notes-container"></div>
+
+        <!-- Interact prompt -->
+        <div id="interact-prompt">
+            <span id="interact-text">Press <b>E</b> to read</span>
+        </div>
+
+        <!-- Mobile controls -->
+        <div id="mobile-controls">
+            <button id="jump-btn" class="mobile-btn">↑<br />JUMP</button>
+        </div>
+
+        <!-- START SCREEN -->
         <div id="start-screen" class="screen active">
             <div class="panel">
                 <h1>SILENT VERSE</h1>
-                <p class="subtitle">Isang 3D na laro ng tula, lohika, at pag-ibig.</p>
+                <p class="subtitle">A 3D game of poetry, logic, and love.</p>
                 <p class="lore">
-                    Sa isang tahimik na lambak, may dalawang kaluluwa<br />
-                    na naghihintay sa isa't isa.<br />
-                    Ngunit ang daan patungo sa kanila ay puno ng mga tulang misteryo.<br />
-                    Sagutin ang bawat bugtong upang maabot ang dulo.
+                    In a quiet valley, two souls<br />
+                    await each other.<br />
+                    But the path leading to them is full of mysterious poems.<br />
+                    Answer each riddle to reach the end.
                 </p>
-                <p class="choose">Pumili ng iyong karakter:</p>
+                <p class="choose">CHOOSE YOUR CHARACTER:</p>
                 <div class="choices">
                     <button id="pick-male" class="choice-btn">
                         <span class="emoji">🧑</span>
-                        <span>Lalaki</span>
+                        <span>Male</span>
                     </button>
                     <button id="pick-female" class="choice-btn">
                         <span class="emoji">👩</span>
-                        <span>Babae</span>
+                        <span>Woman</span>
                     </button>
                 </div>
-                <p class="hint-audio">💡 Payo: I-click muna ang screen para magsimula ang musika.</p>
+                <p class="hint-audio">💡 Tip: Click the screen first to start the music.</p>
             </div>
         </div>
 
+        <!-- PUZZLE MODAL -->
         <div id="puzzle-modal" class="screen">
             <div class="panel puzzle-panel">
                 <div class="poem" id="puzzle-poem"></div>
@@ -55,24 +70,19 @@
             </div>
         </div>
 
+        <!-- ENDING SCREEN -->
         <div id="ending-screen" class="screen">
-            <div id="ending-poem" class="ending-poem"></div>
-            <button id="restart-btn">Ulitin ang Paglalakbay</button>
+            <div class="ending-content">
+                <p class="ending-caption">Together at last.</p>
+                <button id="final-poem-btn" class="final-poem-btn">
+                    📖 Tap to read the final poem
+                </button>
+            </div>
+            <button id="restart-btn">Relive the Journey</button>
         </div>
-
-        <div id="interact-prompt">Pindutin ang <b>E</b> o <b>Click</b> upang tingnan</div>
     </div>
 
     <script type="module" src="/src/main.js"></script>
 </body>
-<div id="ending-screen" class="screen">
-  <div class="ending-content">
-    <p class="ending-caption">Together at last.</p>
-    <button id="final-poem-btn" class="final-poem-btn">
-      Tap to read the final poem
-    </button>
-  </div>
-  <button id="restart-btn">Relive the Journey</button>
-</div>
 
 </html>
