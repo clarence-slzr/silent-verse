@@ -47,10 +47,9 @@
             <div class="panel puzzle-panel">
                 <div class="poem" id="puzzle-poem"></div>
                 <div class="question" id="puzzle-question"></div>
-                <input type="text" id="puzzle-input" placeholder="Isulat ang sagot..." autocomplete="off" />
+                <div id="puzzle-choices" class="puzzle-choices"></div>
                 <div class="puzzle-actions">
-                    <button id="submit-answer">Isumite</button>
-                    <button id="close-puzzle">Lisanin</button>
+                    <button id="close-puzzle">Leave</button>
                 </div>
                 <div class="feedback" id="puzzle-feedback"></div>
             </div>
@@ -66,5 +65,14 @@
 
     <script type="module" src="/src/main.js"></script>
 </body>
+<div id="ending-screen" class="screen">
+  <div class="ending-content">
+    <p class="ending-caption">Together at last.</p>
+    <button id="final-poem-btn" class="final-poem-btn">
+      Tap to read the final poem
+    </button>
+  </div>
+  <button id="restart-btn">Relive the Journey</button>
+</div>
 
 </html>

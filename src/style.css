@@ -343,4 +343,89 @@ body {
     #controls-hint {
         font-size: 10px;
     }
+
+    /* Multiple choice buttons */
+    .puzzle-choices {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+
+    .choice-option {
+        padding: 14px 20px;
+        background: rgba(40, 30, 70, 0.6);
+        border: 1px solid rgba(200, 170, 255, 0.3);
+        border-radius: 8px;
+        color: #f0e6d2;
+        font-family: inherit;
+        font-size: 15px;
+        letter-spacing: 1px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-align: left;
+    }
+
+    .choice-option:hover:not(:disabled) {
+        background: rgba(90, 60, 150, 0.6);
+        border-color: #c9a0ff;
+        transform: translateX(4px);
+    }
+
+    .choice-option.correct {
+        background: rgba(80, 200, 120, 0.4);
+        border-color: #80ff80;
+        color: #fff;
+    }
+
+    .choice-option.wrong {
+        background: rgba(200, 80, 80, 0.4);
+        border-color: #ff8080;
+        color: #ffdddd;
+    }
+
+    .choice-option:disabled {
+        cursor: not-allowed;
+        opacity: 0.7;
+    }
+
+    /* Ending screen */
+    .ending-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+        opacity: 0;
+        animation: poemFade 2s ease forwards;
+        animation-delay: 9s;
+    }
+
+    .ending-caption {
+        font-size: 20px;
+        font-style: italic;
+        letter-spacing: 3px;
+        color: #fff2d8;
+        text-shadow: 0 0 20px rgba(255, 200, 120, 0.8);
+    }
+
+    .final-poem-btn {
+        padding: 16px 32px;
+        background: linear-gradient(135deg, rgba(255, 180, 120, 0.9), rgba(255, 120, 180, 0.9));
+        border: 2px solid rgba(255, 255, 255, 0.6);
+        border-radius: 40px;
+        color: #2a1a3a;
+        font-family: inherit;
+        font-size: 16px;
+        font-weight: bold;
+        letter-spacing: 2px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 0 40px rgba(255, 180, 120, 0.6);
+        pointer-events: all;
+    }
+
+    .final-poem-btn:hover {
+        transform: scale(1.08);
+        box-shadow: 0 0 60px rgba(255, 180, 120, 0.9);
+    }
 }

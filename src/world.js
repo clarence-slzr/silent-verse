@@ -273,4 +273,144 @@ export function createFlower() {
     group.add(light);
 
     return group;
+
+}
+// ==== IDAGDAG MO ITO SA DULO NG src/world.js ====
+
+export function createRainbow() {
+  const group = new THREE.Group();
+  const colors = [0xff0000, 0xff7700, 0xffff00, 0x00ff00, 0x0088ff, 0x4400ff, 0x8800ff];
+  const radiusBase = 30;
+
+  colors.forEach((color, i) => {
+    const radius = radiusBase + i * 0.8;
+    const curve = new THREE.EllipseCurve(
+      0, 0,
+      radius, radius,
+      Math.PI, 0, // top half only
+      false,
+      0
+    );
+    const points = curve.getPoints(50);
+    const geometry = new THREE.BufferGeometry().setFromPoints(
+      points.map(p => new THREE.Vector3(p.x, p.y, 0))
+    );
+    const material = new THREE.LineBasicMaterial({
+      color: color,
+      transparent: true,
+      opacity: 0.5
+    });
+    const arc = new THREE.Line(geometry, material);
+    group.add(arc);
+  });
+
+  return group;
+}
+
+export function createButterflies(count = 30) {
+  const group = new THREE.Group();
+  const butterflies = [];
+
+  for (let i = 0; i < count; i++) {
+    const bf = new THREE.Group();
+
+    const colors = [0xff69b4, 0xffa500, 0xffe066, 0xc9a0ff, 0x87ceeb];
+    const color = colors[Math.floor(Math.random() * colors.length)];
+
+    const wingMat = new THREE.MeshBasicMaterial({
+      color: color,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.9
+    });
+
+    const wingL = new THREE.Mesh(new THREE.CircleGeometry(0.15, 8), wingMat);
+    wingL.position.x = -0.1;
+    bf.add(wingL);
+
+    const wingR = new THREE.Mesh(new THREE.CircleGeometry(0.15, 8), wingMat);
+    wingR.position.x = 0.1;
+    bf.add(wingR);
+
+    bf.userData = {
+      wingL, wingR,
+      phase: Math.random() * Math.PI * 2,
+      speed: 0.5 + Math.random() * 1,
+      radius: 5 + Math.random() * 25,
+      height: 2 + Math.random() * 6,
+      angle: Math.random() * Math.PI * 2,
+      centerX: (Math.random() - 0.5) * 20,
+      centerZ: -20 - Math.random() * 40
+    };
+
+    group.add(bf);
+    butterflies.push(bf);
+  }
+
+  return {
+    group,
+    update: (dt) => {
+      butterflies.forEach(bf => {
+        const u = bf.userData;
+        u.angle += dt * u.speed;
+        bf.position.x = u.centerX + Math.cos(u.angle) * u.radius;
+        bf.position.z = u.centerZ + Math.sin(u.angle) * u.radius;
+        bf.position.y = u.height + Math.sin(u.angle * 3) * 0.5;
+
+        // Flap wings
+        const flap = Math.sin(performance.now() * 0.01 + u.phase) * 0.8;
+        u.wingL.rotation.y = flap;
+        u.wingR.rotation.y = -flap;
+      });
+    }
+  };
+}
+
+export function createBirds(count = 12) {
+  const group = new THREE.Group();
+  const birds = [];
+
+  for (let i = 0; i < count; i++) {
+    const bird = new THREE.Group();
+
+    const mat = new THREE.MeshBasicMaterial({ color: 0x222222, side: THREE.DoubleSide });
+    const wingL = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.15), mat);
+    wingL.position.x = -0.3;
+    bird.add(wingL);
+    const wingR = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.15), mat);
+    wingR.position.x = 0.3;
+    bird.add(wingR);
+
+    bird.userData = {
+      wingL, wingR,
+      phase: Math.random() * Math.PI * 2,
+      speed: 0.3 + Math.random() * 0.4,
+      radius: 30 + Math.random() * 40,
+      height: 12 + Math.random() * 10,
+      angle: Math.random() * Math.PI * 2,
+      centerZ: -50
+    };
+
+    group.add(bird);
+    birds.push(bird);
+  }
+
+  return {
+    group,
+    update: (dt) => {
+      birds.forEach(bird => {
+        const u = bird.userData;
+        u.angle += dt * u.speed * 0.3;
+        bird.position.x = Math.cos(u.angle) * u.radius;
+        bird.position.z = u.centerZ + Math.sin(u.angle) * u.radius * 0.5;
+        bird.position.y = u.height + Math.sin(u.angle * 2) * 1;
+
+        bird.rotation.y = -u.angle + Math.PI / 2;
+
+        const flap = Math.sin(performance.now() * 0.008 + u.phase) * 0.6;
+        u.wingL.rotation.z = flap;
+        u.wingR.rotation.z = -flap;
+      });
+    }
+  };
 }

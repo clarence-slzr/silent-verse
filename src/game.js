@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { audio } from './audio.js';
-import { PUZZLES } from './puzzles.js';
-import { createWorld, createPoemOrbs, createCharacter, createFlower } from './world.js';
+import { PUZZLES, FINAL_POEM_URL } from './puzzles.js';
+import { createWorld, createPoemOrbs, createCharacter, createFlower, createRainbow, createButterflies, createBirds } from './world.js';
 
 export class Game {
     constructor() {
@@ -21,17 +21,18 @@ export class Game {
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x1a1030);
 
+        // First-person camera
         this.camera = new THREE.PerspectiveCamera(
-            65,
+            75,
             window.innerWidth / window.innerHeight,
             0.1,
             500
         );
 
-        const ambient = new THREE.AmbientLight(0x403060, 0.8);
+        const ambient = new THREE.AmbientLight(0x403060, 0.9);
         this.scene.add(ambient);
 
-        const hemi = new THREE.HemisphereLight(0xc9a0ff, 0x1a2a1a, 0.6);
+        const hemi = new THREE.HemisphereLight(0xc9a0ff, 0x1a2a1a, 0.7);
         this.scene.add(hemi);
 
         this.sun = new THREE.DirectionalLight(0xffd8a0, 1.2);
@@ -55,21 +56,23 @@ export class Game {
         this.collectedCount = 0;
 
         this.partner = null;
+        this.rainbow = null;
+        this.butterflies = null;
+        this.birds = null;
 
         this.keys = {};
-        this.mouse = { x: 0, y: 0 };
-        this.cameraAngle = { yaw: 0, pitch: -0.15 };
-        this.velocity = new THREE.Vector3();
+        this.cameraAngle = { yaw: 0, pitch: 0 };
         this.isRunning = false;
         this.nearOrb = null;
         this.puzzleActive = false;
         this.ended = false;
+        this.endingMode = false;
 
         this.counterEl = document.getElementById('counter');
         this.puzzleModal = document.getElementById('puzzle-modal');
         this.puzzlePoem = document.getElementById('puzzle-poem');
         this.puzzleQuestion = document.getElementById('puzzle-question');
-        this.puzzleInput = document.getElementById('puzzle-input');
+        this.puzzleChoices = document.getElementById('puzzle-choices');
         this.puzzleFeedback = document.getElementById('puzzle-feedback');
         this.interactPrompt = document.getElementById('interact-prompt');
 
@@ -79,9 +82,10 @@ export class Game {
 
     start(gender) {
         this.gender = gender;
+        // Create the player (body visible only in ending)
         this.player = createCharacter(this.scene, gender);
         this.player.position.set(0, this.getGroundHeight(0, 0), 0);
-        this.updateCamera(0);
+        this.player.visible = false; // POV — hide own body
         audio.startBg();
     }
 
@@ -117,34 +121,49 @@ export class Game {
 
         document.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement === this.canvas) {
-                this.cameraAngle.yaw -= e.movementX * 0.0025;
-                this.cameraAngle.pitch -= e.movementY * 0.0025;
-                this.cameraAngle.pitch = Math.max(-0.8, Math.min(0.5, this.cameraAngle.pitch));
+                this.cameraAngle.yaw -= e.movementX * 0.0022;
+                this.cameraAngle.pitch -= e.movementY * 0.0022;
+                this.cameraAngle.pitch = Math.max(-1.2, Math.min(1.2, this.cameraAngle.pitch));
             }
         });
 
-        document.getElementById('submit-answer').addEventListener('click', () => this.submitAnswer());
         document.getElementById('close-puzzle').addEventListener('click', () => this.closePuzzle());
-        this.puzzleInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') this.submitAnswer();
-        });
 
         document.getElementById('restart-btn').addEventListener('click', () => {
             location.reload();
         });
+
+        // Ending popup button
+        const finalBtn = document.getElementById('final-poem-btn');
+        if (finalBtn) {
+            finalBtn.addEventListener('click', () => {
+                window.open(FINAL_POEM_URL, '_blank');
+            });
+        }
     }
 
     updateCamera(dt) {
-        if (!this.player) return;
-        const targetY = this.player.position.y + 1.6;
+        if (!this.player || this.endingMode) return;
 
-        const dist = 7;
-        const camX = this.player.position.x + Math.sin(this.cameraAngle.yaw) * dist * Math.cos(this.cameraAngle.pitch);
-        const camZ = this.player.position.z + Math.cos(this.cameraAngle.yaw) * dist * Math.cos(this.cameraAngle.pitch);
-        const camY = targetY + 3 + Math.sin(this.cameraAngle.pitch) * dist;
+        // First-person: camera is at eye-level of player
+        const eyeHeight = this.player.position.y + 1.7;
+        this.camera.position.set(
+            this.player.position.x,
+            eyeHeight,
+            this.player.position.z
+        );
 
-        this.camera.position.lerp(new THREE.Vector3(camX, camY, camZ), 1 - Math.pow(0.001, dt));
-        this.camera.lookAt(this.player.position.x, targetY, this.player.position.z);
+        // Look direction based on yaw/pitch
+        const dir = new THREE.Vector3(
+            -Math.sin(this.cameraAngle.yaw) * Math.cos(this.cameraAngle.pitch),
+            Math.sin(this.cameraAngle.pitch),
+            -Math.cos(this.cameraAngle.yaw) * Math.cos(this.cameraAngle.pitch)
+        );
+        this.camera.lookAt(
+            this.camera.position.x + dir.x,
+            this.camera.position.y + dir.y,
+            this.camera.position.z + dir.z
+        );
     }
 
     updatePlayer(dt) {
@@ -175,24 +194,8 @@ export class Game {
             if (next.length() < maxR) {
                 next.y = this.getGroundHeight(next.x, next.z);
                 this.player.position.copy(next);
-                const targetRot = Math.atan2(move.x, move.z);
-                this.player.rotation.y = this.lerpAngle(this.player.rotation.y, targetRot, 0.15);
             }
         }
-
-        const t = performance.now() * 0.005;
-        this.player.children.forEach((c, i) => {
-            if (c.geometry && c.geometry.type === 'CylinderGeometry' && i < 2) {
-                c.rotation.x = Math.sin(t + i) * 0.15 * (move.length() > 0 ? 1 : 0);
-            }
-        });
-    }
-
-    lerpAngle(a, b, t) {
-        let diff = b - a;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        while (diff < -Math.PI) diff += Math.PI * 2;
-        return a + diff * t;
     }
 
     updateOrbs(dt) {
@@ -220,7 +223,7 @@ export class Game {
         if (this.nearOrb && !this.puzzleActive && !this.ended) {
             this.interactPrompt.classList.add('show');
             const idx = this.nearOrb.userData.index;
-            this.interactPrompt.innerHTML = `Pindutin ang <b>E</b> upang basahin ang Tula #${idx + 1}`;
+            this.interactPrompt.innerHTML = `Press <b>E</b> or <b>Click</b> to read Poem #${idx + 1}`;
         } else {
             this.interactPrompt.classList.remove('show');
         }
@@ -234,30 +237,41 @@ export class Game {
 
         const p = orb.userData.puzzle;
         const idx = orb.userData.index;
-        this.puzzlePoem.textContent = p.poem;
+        this.puzzlePoem.textContent = p.excerpt;
         this.puzzleQuestion.textContent = `${idx + 1}. ${p.question}`;
-        this.puzzleInput.value = '';
         this.puzzleFeedback.textContent = '';
         this.puzzleFeedback.className = 'feedback';
+
+        // Build multiple choice buttons
+        this.puzzleChoices.innerHTML = '';
+        const shuffled = [...p.choices].sort(() => Math.random() - 0.5);
+        shuffled.forEach((choice) => {
+            const btn = document.createElement('button');
+            btn.className = 'choice-option';
+            btn.textContent = choice;
+            btn.addEventListener('click', () => this.checkAnswer(choice, btn));
+            this.puzzleChoices.appendChild(btn);
+        });
+
         this.puzzleModal.classList.add('active');
-        setTimeout(() => this.puzzleInput.focus(), 100);
     }
 
-    submitAnswer() {
+    checkAnswer(choice, btn) {
         if (!this.currentOrb) return;
         const p = this.currentOrb.userData.puzzle;
-        const ans = this.puzzleInput.value.trim().toLowerCase();
 
-        const normalized = p.answers.map(a => a.toLowerCase());
-        const isCorrect = normalized.some(a => a === ans) || normalized.some(a => ans.includes(a) && ans.length >= a.length);
-
-        if (isCorrect) {
-            this.puzzleFeedback.textContent = '✨ Tama! Naglaho ang tula at sumikat ang ilaw.';
+        if (choice === p.correct) {
+            btn.classList.add('correct');
+            this.puzzleFeedback.textContent = '✨ Correct! The poem fades into light.';
             this.puzzleFeedback.className = 'feedback ok';
             audio.correct();
+            // Disable all buttons
+            this.puzzleChoices.querySelectorAll('button').forEach(b => b.disabled = true);
             setTimeout(() => this.solvePuzzle(this.currentOrb), 900);
         } else {
-            this.puzzleFeedback.textContent = '🌙 Mali... Basahin muli ang tula.';
+            btn.classList.add('wrong');
+            btn.disabled = true;
+            this.puzzleFeedback.textContent = '🌙 Not quite... Read the excerpt again.';
             this.puzzleFeedback.className = 'feedback err';
             audio.wrong();
         }
@@ -266,7 +280,7 @@ export class Game {
     solvePuzzle(orb) {
         orb.userData.collected = true;
         this.collectedCount++;
-        this.counterEl.textContent = `Nahanap: ${this.collectedCount} / ${PUZZLES.length}`;
+        this.counterEl.textContent = `Found: ${this.collectedCount} / ${PUZZLES.length}`;
 
         let scale = 1;
         const dissolve = () => {
@@ -294,46 +308,71 @@ export class Game {
 
     startEnding() {
         this.ended = true;
+        this.endingMode = true;
         this.interactPrompt.classList.remove('show');
 
+        // Position player and partner side by side, both facing sunset (POV)
         const endX = 0, endZ = 0;
-        this.player.position.set(endX, this.getGroundHeight(endX, endZ), endZ);
+        this.player.position.set(endX - 0.7, this.getGroundHeight(endX - 0.7, endZ), endZ);
+        this.player.visible = true;
         this.player.rotation.y = 0;
 
         const partnerGender = this.gender === 'male' ? 'female' : 'male';
         this.partner = createCharacter(this.scene, partnerGender);
-        const px = endX, pz = endZ - 3;
-        this.partner.position.set(px, this.getGroundHeight(px, pz), pz);
-        this.partner.rotation.y = Math.PI;
+        this.partner.position.set(endX + 0.7, this.getGroundHeight(endX + 0.7, endZ), endZ);
+        this.partner.rotation.y = 0;
 
+        // Flower
         this.flower = createFlower();
         this.flower.position.set(0, this.getGroundHeight(0, -1.5) + 1, -1.5);
         this.flower.visible = false;
         this.scene.add(this.flower);
 
+        // Cinematic: camera behind characters looking at sunset
         this.animateSunset();
 
-        this.cameraAngle.yaw = Math.PI;
-        this.cameraAngle.pitch = -0.1;
+        // Set camera to look forward (towards sunset at -Z)
+        this.cameraAngle.yaw = 0;
+        this.cameraAngle.pitch = 0;
+        this.endingCameraDist = 6;
 
         setTimeout(() => {
             this.flower.visible = true;
             audio.endingChime();
             this.flowerAnimation();
-        }, 3500);
+            this.spawnEndingEffects();
+        }, 3000);
 
-        setTimeout(() => this.showEndingPoem(), 6000);
+        // Show final popup after sunset
+        setTimeout(() => this.showEndingUI(), 8000);
+    }
+
+    spawnEndingEffects() {
+        // Rainbow
+        this.rainbow = createRainbow();
+        this.rainbow.position.set(0, 20, -80);
+        this.scene.add(this.rainbow);
+
+        // Butterflies
+        this.butterflies = createButterflies(30);
+        this.scene.add(this.butterflies.group);
+
+        // Birds
+        this.birds = createBirds(12);
+        this.scene.add(this.birds.group);
     }
 
     animateSunset() {
         const startBg = new THREE.Color(0x1a1030);
-        const endBg = new THREE.Color(0xff7a4a);
+        const endBg = new THREE.Color(0xffb080);
         const startSun = new THREE.Color(0xffd8a0);
-        const endSun = new THREE.Color(0xff5030);
+        const endSun = new THREE.Color(0xff8060);
         const startPos = this.sun.position.clone();
-        const endPos = new THREE.Vector3(-80, 20, -100);
+        const endPos = new THREE.Vector3(-100, 15, -120);
+        const startAmbient = 0.9;
+        const endAmbient = 1.6;
 
-        const duration = 5000;
+        const duration = 6000;
         const start = performance.now();
 
         const animate = () => {
@@ -344,7 +383,7 @@ export class Game {
             this.scene.fog.color.copy(startBg).lerp(endBg, ease);
             this.sun.color.copy(startSun).lerp(endSun, ease);
             this.sun.position.lerpVectors(startPos, endPos, ease);
-            this.sun.intensity = 1.2 - ease * 0.5;
+            this.sun.intensity = 1.2 + ease * 0.8;
 
             if (t < 1) requestAnimationFrame(animate);
         };
@@ -367,54 +406,24 @@ export class Game {
         animate();
     }
 
-    showEndingPoem() {
-        const isMale = this.gender === 'male';
-        const poem = isMale
-            ? `Sa ilalim ng nagbabagang takipsilim,
-ang bulaklak ay iniabot ng iyong kamay.
-Ngumiti siya — tahimik, wagas, wagas.
-Hinawakan mo ang kanyang palad,
-at doon nagsimula ang walang hanggang tula.
-
-"Dalawang kaluluwa, isang lilim,
-sa dulo ng daan, ikaw at ako.
-Ang bawat bugtong ay naging daan,
-patungo sa puso mong tahanan."`
-            : `Sa ilalim ng nagbabagang takipsilim,
-iniabot niya sa iyo ang bulaklak.
-Ngumiti ka — tahimik, wagas, wagas.
-Hinawakan niya ang iyong palad,
-at doon nagsimula ang walang hanggang tula.
-
-"Dalawang kaluluwa, isang lilim,
-sa dulo ng daan, ikaw at ako.
-Ang bawat bugtong ay naging daan,
-patungo sa puso mong tahanan."`;
-
+    showEndingUI() {
         const endingScreen = document.getElementById('ending-screen');
-        document.getElementById('ending-poem').textContent = poem;
         endingScreen.classList.add('active');
-
-        this.handHoldAnimation();
     }
 
-    handHoldAnimation() {
-        if (!this.partner || !this.player) return;
-        const targetPartnerX = this.player.position.x + 0.7;
-        const targetPartnerZ = this.player.position.z - 1.2;
-        const startX = this.partner.position.x;
-        const startZ = this.partner.position.z;
-        const duration = 3000;
-        const start = performance.now();
+    updateEndingCamera(dt) {
+        if (!this.endingMode || !this.player) return;
 
-        const animate = () => {
-            const t = Math.min(1, (performance.now() - start) / duration);
-            const ease = 1 - Math.pow(1 - t, 3);
-            this.partner.position.x = startX + (targetPartnerX - startX) * ease;
-            this.partner.position.z = startZ + (targetPartnerZ - startZ) * ease;
-            if (t < 1) requestAnimationFrame(animate);
-        };
-        animate();
+        // Cinematic: pull back and show both characters from behind
+        const midX = (this.player.position.x + (this.partner?.position.x || 0)) / 2;
+        const midZ = (this.player.position.z + (this.partner?.position.z || 0)) / 2;
+
+        const targetX = midX;
+        const targetZ = midZ + this.endingCameraDist;
+        const targetY = this.getGroundHeight(midX, midZ) + 2.5;
+
+        this.camera.position.lerp(new THREE.Vector3(targetX, targetY, targetZ), 1 - Math.pow(0.001, dt));
+        this.camera.lookAt(midX, this.getGroundHeight(midX, midZ) + 1.5, midZ - 30);
     }
 
     animate() {
@@ -424,10 +433,18 @@ patungo sa puso mong tahanan."`;
         this.lastTime = now;
 
         if (this.player) {
-            this.updatePlayer(dt);
-            this.updateCamera(dt);
-            this.updateOrbs(dt);
+            if (this.endingMode) {
+                this.updateEndingCamera(dt);
+            } else {
+                this.updatePlayer(dt);
+                this.updateCamera(dt);
+                this.updateOrbs(dt);
+            }
         }
+
+        // Animate butterflies and birds
+        if (this.butterflies) this.butterflies.update(dt);
+        if (this.birds) this.birds.update(dt);
 
         this.renderer.render(this.scene, this.camera);
     }
