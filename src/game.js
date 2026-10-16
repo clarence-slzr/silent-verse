@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { audio } from './audio.js';
 import { PUZZLES, FINAL_POEM_URL } from './puzzles.js';
 import {
-    createWorld, createPoemOrbs, createCharacter, createCat,
-    createFlower, createButterflies, createBirds
+    createWorld, createPoemOrbs, createCharacter, createMaleCharacter, createCat,
+    createFlower, createEnvelope, createButterflies, createBirds, createFireflies,
+    createSkyGradient
 } from './world.js';
 
 const WALKING_NOTES = [
@@ -17,6 +18,8 @@ const WALKING_NOTES = [
     'Silence speaks in verses.',
     'You are not alone here.',
     'Follow the glow.',
+    'The fireflies are watching.',
+    'Something is waiting at the end...',
 ];
 
 export class Game {
@@ -35,8 +38,11 @@ export class Game {
 
         this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
 
-        const ambient = new THREE.AmbientLight(0x8060a0, 1.0);
-        this.scene.add(ambient);
+        // ===== LIGHTS =====
+        this.ambient = new THREE.AmbientLight(0x8060a0, 1.0);
+        this.ambient.userData.isAmbientLight = true;
+        this.scene.add(this.ambient);
+
         const hemi = new THREE.HemisphereLight(0xc9a0ff, 0x2a3a2a, 0.8);
         this.scene.add(hemi);
 
@@ -51,18 +57,40 @@ export class Game {
         this.sun.shadow.camera.far = 300;
         this.scene.add(this.sun);
 
+        // ===== WORLD =====
         const worldData = createWorld(this.scene);
         this.getGroundHeight = worldData.getGroundHeight;
         this.collidables = worldData.collidables;
+        this.ground = worldData.ground;
+        this.grass = worldData.grass;
+        this.grassBaseColor = new THREE.Color(0x3e5a3a);
+        this.grassWarmColor = new THREE.Color(0x8a6a3a);
+
+        // ===== SKY GRADIENT =====
+        this.skyGradient = createSkyGradient();
+        this.scene.add(this.skyGradient);
+
+        // ===== FIREFLIES =====
+        this.fireflies = createFireflies(50);
+        this.scene.add(this.fireflies.group);
+
+        // ===== STARS (reference para mag-fade) =====
+        this.stars = [];
+        this.scene.traverse(obj => {
+            if (obj.isMesh && obj.geometry && obj.geometry.type === 'SphereGeometry' && obj.position.y > 30) {
+                this.stars.push(obj);
+            }
+        });
 
         this.orbs = createPoemOrbs(this.scene, PUZZLES, this.getGroundHeight);
         this.collectedCount = 0;
 
-        this.gender = null;
         this.playerName = '';
         this.player = null;
         this.partner = null;
         this.partnerCat = null;
+        this.flower = null;
+        this.envelope = null;
 
         this.cameraMode = 'third';
         this.cameraAngle = { yaw: 0, pitch: 0.25 };
@@ -112,9 +140,8 @@ export class Game {
     }
 
     start(gender, playerName) {
-        this.gender = gender;
-        this.playerName = playerName || 'Wanderer';
-        this.player = createCharacter(this.scene, gender);
+        this.playerName = playerName || 'Sophia';
+        this.player = createCharacter(this.scene, 'female');
         this.player.position.set(0, this.getGroundHeight(0, 0), 0);
         this.groundY = this.player.position.y;
         this.updatePlayerVisibility();
@@ -122,8 +149,6 @@ export class Game {
         if (this.nameDisplay) {
             this.nameDisplay.textContent = `— ${this.playerName} —`;
         }
-
-        audio.startBg();
     }
 
     updatePlayerVisibility() {
@@ -148,9 +173,12 @@ export class Game {
             if (e.key.toLowerCase() === 'e' && this.nearOrb && !this.puzzleActive && !this.ended) {
                 this.openPuzzle(this.nearOrb);
             }
+            if (e.key === ' ' && this.player && !this.puzzleActive && !this.ended) {
+                this.jump();
+                e.preventDefault();
+            }
         });
 
-        // ===== CLICK-TO-MOVE =====
         this.canvas.addEventListener('click', (e) => {
             if (this.puzzleActive || this.ended) return;
             if (this.nearOrb) {
@@ -170,7 +198,6 @@ export class Game {
             this.setMoveTarget(touch.clientX, touch.clientY);
         }, { passive: true });
 
-        // ===== MOUSE CAMERA ROTATION (right-click drag) =====
         let dragging = false;
         let dragStart = null;
 
@@ -194,11 +221,8 @@ export class Game {
             }
         });
 
-        document.addEventListener('mouseup', () => {
-            dragging = false;
-        });
+        document.addEventListener('mouseup', () => { dragging = false; });
 
-        // ===== TOUCH CAMERA ROTATION (2 fingers) =====
         let touchStart = null;
         this.canvas.addEventListener('touchstart', (e) => {
             if (e.touches.length === 2) {
@@ -222,18 +246,14 @@ export class Game {
             }
         }, { passive: true });
 
-        this.canvas.addEventListener('touchend', () => {
-            touchStart = null;
-        });
+        this.canvas.addEventListener('touchend', () => { touchStart = null; });
 
-        // ===== JUMP =====
         const jumpBtn = document.getElementById('jump-btn');
         if (jumpBtn) {
             jumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); this.jump(); });
             jumpBtn.addEventListener('click', () => this.jump());
         }
 
-        // ===== CAMERA MENU =====
         this.cameraToggle.addEventListener('click', (e) => {
             e.stopPropagation();
             this.cameraMenu.classList.toggle('show');
@@ -252,7 +272,6 @@ export class Game {
             }
         });
 
-        // ===== CAMERA SENSITIVITY =====
         if (this.sensitivitySlider) {
             const saved = localStorage.getItem('cameraSensitivity');
             if (saved) {
@@ -262,13 +281,10 @@ export class Game {
                     this.sensitivityValue.textContent = Math.round(this.cameraSensitivity * 1000);
                 }
             }
-
             this.sensitivitySlider.addEventListener('input', (e) => {
                 const val = parseFloat(e.target.value) / 1000;
                 this.cameraSensitivity = val;
-                if (this.sensitivityValue) {
-                    this.sensitivityValue.textContent = e.target.value;
-                }
+                if (this.sensitivityValue) this.sensitivityValue.textContent = e.target.value;
                 localStorage.setItem('cameraSensitivity', val);
             });
         }
@@ -285,75 +301,6 @@ export class Game {
         document.getElementById('restart-btn').addEventListener('click', () => {
             location.reload();
         });
-
-        // ===== MUSIC MENU =====
-        const musicToggle = document.getElementById('music-toggle');
-        const musicMenu = document.getElementById('music-menu');
-        const musicOptions = document.querySelectorAll('.music-option');
-        const volumeSlider = document.getElementById('volume-slider');
-        const volumeValue = document.getElementById('volume-value');
-
-        if (musicToggle && musicMenu) {
-            musicToggle.addEventListener('click', (e) => {
-                e.stopPropagation();
-                musicMenu.classList.toggle('show');
-            });
-
-            musicOptions.forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const songId = parseInt(btn.dataset.song);
-                    audio.playSong(songId);
-
-                    musicOptions.forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-
-                    if (songId === 0) {
-                        musicToggle.classList.remove('playing');
-                    } else {
-                        musicToggle.classList.add('playing');
-                    }
-
-                    musicMenu.classList.remove('show');
-                });
-            });
-
-            // Load saved music state
-            const savedSong = localStorage.getItem('currentSong');
-            if (savedSong !== null) {
-                const songId = parseInt(savedSong);
-                musicOptions.forEach(b => {
-                    b.classList.toggle('active', parseInt(b.dataset.song) === songId);
-                });
-                if (songId !== 0) {
-                    musicToggle.classList.add('playing');
-                }
-            } else {
-                musicToggle.classList.add('playing');
-            }
-
-            // Volume slider
-            if (volumeSlider && volumeValue) {
-                const savedVol = localStorage.getItem('musicVolume');
-                if (savedVol) {
-                    volumeSlider.value = parseFloat(savedVol) * 100;
-                    volumeValue.textContent = Math.round(parseFloat(savedVol) * 100);
-                }
-
-                volumeSlider.addEventListener('input', (e) => {
-                    const vol = parseInt(e.target.value);
-                    volumeValue.textContent = vol;
-                    audio.setVolume(vol);
-                });
-            }
-
-            // Close menu on outside click
-            document.addEventListener('click', (e) => {
-                if (!musicMenu.contains(e.target) && e.target !== musicToggle) {
-                    musicMenu.classList.remove('show');
-                }
-            });
-        }
     }
 
     setCameraMode(mode) {
@@ -366,7 +313,6 @@ export class Game {
 
     setMoveTarget(clientX, clientY) {
         if (!this.player || !this.camera) return;
-
         const rect = this.canvas.getBoundingClientRect();
         const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
         const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1;
@@ -394,18 +340,6 @@ export class Game {
         }
         this.moveMarker.position.set(pos.x, this.getGroundHeight(pos.x, pos.z) + 0.1, pos.z);
         this.moveMarker.visible = true;
-
-        let scale = 1;
-        const pulse = () => {
-            scale -= 0.04;
-            if (scale < 0.5) {
-                this.moveMarker.scale.setScalar(1);
-                return;
-            }
-            this.moveMarker.scale.setScalar(scale);
-            requestAnimationFrame(pulse);
-        };
-        pulse();
 
         clearTimeout(this._markerTimeout);
         this._markerTimeout = setTimeout(() => {
@@ -616,7 +550,7 @@ export class Game {
             this.puzzleFeedback.className = 'feedback ok';
             audio.correct();
             this.puzzleChoices.querySelectorAll('button').forEach(b => b.disabled = true);
-            setTimeout(() => this.solvePuzzle(this.currentOrb), 900);
+            setTimeout(() => this.solvePuzzle(this.currentOrb), 700);
         } else {
             btn.classList.add('wrong');
             btn.disabled = true;
@@ -668,11 +602,18 @@ export class Game {
         this.counterEl.textContent = `Found: ${this.collectedCount} / ${PUZZLES.length}`;
 
         let scale = 1;
+        const startTime = performance.now();
+        const duration = 800;
+
         const dissolve = () => {
-            scale -= 0.05;
-            orb.scale.setScalar(Math.max(0, scale));
-            orb.userData.light.intensity = Math.max(0, orb.userData.light.intensity - 0.1);
-            if (scale > 0) requestAnimationFrame(dissolve);
+            const t = Math.min(1, (performance.now() - startTime) / duration);
+            const ease = 1 - Math.pow(1 - t, 3);
+
+            scale = 1 - ease;
+            orb.scale.setScalar(Math.max(0.01, scale));
+            orb.userData.light.intensity = Math.max(0, 2 - ease * 2);
+
+            if (t < 1) requestAnimationFrame(dissolve);
             else orb.visible = false;
         };
         audio.pickup();
@@ -681,7 +622,7 @@ export class Game {
         this.closePuzzle();
 
         if (this.collectedCount >= PUZZLES.length) {
-            setTimeout(() => this.startEnding(), 1200);
+            setTimeout(() => this.startEnding(), 1000);
         }
     }
 
@@ -693,36 +634,71 @@ export class Game {
         this.updateLivesDisplay();
     }
 
+    // ===== CINEMATIC ENDING WITH SMOOTH TRANSITION =====
     startEnding() {
         this.ended = true;
         this.endingMode = true;
         this.interactPrompt.classList.remove('show');
         this.cameraMenu.classList.remove('show');
 
-        const endX = 0, endZ = 0;
-        this.player.position.set(endX - 8, this.getGroundHeight(endX - 8, endZ), endZ);
-        this.player.rotation.y = Math.PI / 2;
-        this.player.visible = true;
+        // ===== FADE TO BLACK =====
+        const overlay = document.createElement('div');
+        overlay.id = 'cinematic-fade';
+        overlay.style.cssText = `
+      position: fixed; inset: 0; background: #000;
+      z-index: 9999; opacity: 0; pointer-events: none;
+      transition: opacity 2s ease;
+    `;
+        document.body.appendChild(overlay);
+        void overlay.offsetWidth;
+        setTimeout(() => overlay.style.opacity = '1', 10);
 
-        const u = this.player.userData;
-        if (u.leftArm) u.leftArm.rotation.x = 0;
-        if (u.rightArm) u.rightArm.rotation.x = 0;
-        if (u.leftLeg) u.leftLeg.rotation.x = 0;
-        if (u.rightLeg) u.rightLeg.rotation.x = 0;
+        // Setup scene during black
+        setTimeout(() => {
+            const endX = 0, endZ = 0;
+            this.player.position.set(endX - 8, this.getGroundHeight(endX - 8, endZ), endZ);
+            this.player.rotation.y = Math.PI / 2;
+            this.player.visible = true;
 
-        const partnerGender = this.gender === 'male' ? 'female' : 'male';
-        this.partner = createCharacter(this.scene, partnerGender);
-        this.partner.position.set(endX + 8, this.getGroundHeight(endX + 8, endZ), endZ);
-        this.partner.rotation.y = -Math.PI / 2;
+            const u = this.player.userData;
+            if (u.leftArm) u.leftArm.rotation.x = 0;
+            if (u.rightArm) u.rightArm.rotation.x = 0;
+            if (u.leftLeg) u.leftLeg.rotation.x = 0;
+            if (u.rightLeg) u.rightLeg.rotation.x = 0;
 
-        this.partnerCat = createCat(this.partner, true);
+            this.partner = createMaleCharacter(this.scene);
+            this.partner.position.set(endX + 8, this.getGroundHeight(endX + 8, endZ), endZ);
+            this.partner.rotation.y = -Math.PI / 2;
 
-        this.flower = createFlower();
-        this.flower.position.set(-0.5, 1.2, 0.35);
-        this.player.add(this.flower);
+            this.partnerCat = createCat(null, false);
+            this.partnerCat.scale.setScalar(1.2);
+            this.scene.add(this.partnerCat);
+            this.partnerCat.position.set(
+                this.partner.position.x + 1.2,
+                this.getGroundHeight(this.partner.position.x + 1.2, this.partner.position.z - 1),
+                this.partner.position.z - 1
+            );
 
-        this.animateSunset();
-        this.runEndingSequence();
+            this.flower = createFlower();
+            this.flower.position.set(0.55, 0.6, 0.3);
+            this.flower.scale.setScalar(0.8);
+            this.partner.add(this.flower);
+
+            this.envelope = createEnvelope();
+            this.envelope.position.set(-0.55, 0.6, 0.3);
+            this.envelope.scale.setScalar(1.2);
+            this.partner.add(this.envelope);
+
+            // Fade out black overlay
+            setTimeout(() => overlay.style.opacity = '0', 300);
+            setTimeout(() => overlay.remove(), 2500);
+
+            // Start smooth sunset transition (12s)
+            this.animateSunsetSmooth();
+
+            // Run sequence
+            this.runEndingSequence();
+        }, 1500);
     }
 
     runEndingSequence() {
@@ -740,6 +716,15 @@ export class Game {
             const partnerStartX = 8;
             const partnerTargetX = 1.2;
             this.partner.position.x = partnerStartX + (partnerTargetX - partnerStartX) * ease;
+
+            if (this.partnerCat) {
+                const catTargetX = this.partner.position.x + 1;
+                const catTargetZ = this.partner.position.z - 1;
+                this.partnerCat.position.x = catTargetX;
+                this.partnerCat.position.z = catTargetZ;
+                this.partnerCat.position.y = this.getGroundHeight(catTargetX, catTargetZ);
+                this.partnerCat.rotation.y = -Math.PI / 2;
+            }
 
             const walkCycle = performance.now() * 0.012;
             const swing = Math.sin(walkCycle);
@@ -766,41 +751,60 @@ export class Game {
                 };
                 resetLimbs(uP);
                 resetLimbs(uPtn);
-                setTimeout(() => this.giveFlowerPhase(), 500);
+                setTimeout(() => this.giveGiftsPhase(), 500);
             }
         };
         walkPhase();
     }
 
-    giveFlowerPhase() {
-        const startPos = new THREE.Vector3(-0.5, 1.2, 0.35);
-        const duration = 1500;
+    giveGiftsPhase() {
+        const duration = 1800;
         const start = performance.now();
 
-        this.player.remove(this.flower);
+        this.partner.remove(this.flower);
+        this.partner.remove(this.envelope);
         this.scene.add(this.flower);
-        this.flower.position.copy(this.player.position).add(startPos);
+        this.scene.add(this.envelope);
+
+        this.flower.position.copy(this.partner.position).add(new THREE.Vector3(0.55, 0.6, 0.3));
+        this.envelope.position.copy(this.partner.position).add(new THREE.Vector3(-0.55, 0.6, 0.3));
 
         const animate = () => {
             const t = Math.min(1, (performance.now() - start) / duration);
             const ease = 1 - Math.pow(1 - t, 3);
 
-            const targetWorld = new THREE.Vector3(
-                this.partner.position.x - 0.5,
-                this.partner.position.y + 1.2,
-                this.partner.position.z + 0.35
+            const flowerTarget = new THREE.Vector3(
+                this.player.position.x + 0.48,
+                this.player.position.y + 0.6,
+                this.player.position.z + 0.3
             );
 
-            const currentPos = this.flower.position.clone().lerp(targetWorld, ease);
-            currentPos.y += Math.sin(t * Math.PI) * 0.5;
-            this.flower.position.copy(currentPos);
+            const envelopeTarget = new THREE.Vector3(
+                this.player.position.x - 0.48,
+                this.player.position.y + 0.6,
+                this.player.position.z + 0.3
+            );
+
+            const flowerPos = this.flower.position.clone().lerp(flowerTarget, ease);
+            flowerPos.y += Math.sin(t * Math.PI) * 0.5;
+            this.flower.position.copy(flowerPos);
             this.flower.rotation.y += 0.05;
+
+            const envelopePos = this.envelope.position.clone().lerp(envelopeTarget, ease);
+            envelopePos.y += Math.sin(t * Math.PI) * 0.5;
+            this.envelope.position.copy(envelopePos);
+            this.envelope.rotation.y += 0.05;
 
             if (t < 1) requestAnimationFrame(animate);
             else {
                 this.scene.remove(this.flower);
-                this.flower.position.set(-0.5, 1.2, 0.35);
-                this.partner.add(this.flower);
+                this.scene.remove(this.envelope);
+                this.flower.position.set(0.48, 0.6, 0.3);
+                this.flower.scale.setScalar(0.8);
+                this.envelope.position.set(-0.48, 0.6, 0.3);
+                this.envelope.scale.setScalar(1.2);
+                this.player.add(this.flower);
+                this.player.add(this.envelope);
                 setTimeout(() => this.sitDownPhase(), 800);
             }
         };
@@ -811,17 +815,25 @@ export class Game {
         this.player.rotation.y = Math.PI;
         this.partner.rotation.y = Math.PI;
 
+        if (this.partnerCat) {
+            this.partnerCat.rotation.y = Math.PI;
+        }
+
         const sitOffset = -0.5;
         const duration = 1500;
         const start = performance.now();
         const startY1 = this.player.position.y;
         const startY2 = this.partner.position.y;
+        const startY3 = this.partnerCat ? this.partnerCat.position.y : 0;
 
         const animate = () => {
             const t = Math.min(1, (performance.now() - start) / duration);
             const ease = 1 - Math.pow(1 - t, 3);
             this.player.position.y = startY1 + sitOffset * ease;
             this.partner.position.y = startY2 + sitOffset * ease;
+            if (this.partnerCat) {
+                this.partnerCat.position.y = startY3 + (sitOffset * 0.3) * ease;
+            }
             if (t < 1) requestAnimationFrame(animate);
             else {
                 this.spawnEndingEffects();
@@ -838,37 +850,107 @@ export class Game {
         this.scene.add(this.birds.group);
     }
 
-    animateSunset() {
-        const startBg = new THREE.Color(0x1a0a2a);
-        const midBg = new THREE.Color(0xff8060);
-        const endBg = new THREE.Color(0xffb080);
+    // ===== SMOOTH SUNSET — 12 seconds, 4 phases =====
+    animateSunsetSmooth() {
+        const startTime = performance.now();
+        const duration = 12000; // 12 seconds — smooth transition
+
+        // Sky gradient colors
+        const skyNight = new THREE.Color(0x1a0a2a);
+        const skyDusk = new THREE.Color(0x4a2a5a);
+        const skyWarm = new THREE.Color(0xff8060);
+        const skyGold = new THREE.Color(0xffb080);
+
+        const horizonNight = new THREE.Color(0x2a1a4a);
+        const horizonDusk = new THREE.Color(0x7a3a6a);
+        const horizonWarm = new THREE.Color(0xffa070);
+        const horizonGold = new THREE.Color(0xffd0a0);
 
         const startSunColor = new THREE.Color(0xffd8a0);
         const endSunColor = new THREE.Color(0xff6040);
 
-        const startPos = this.sun.position.clone();
-        const endPos = new THREE.Vector3(-80, 8, -120);
+        const startSunPos = this.sun.position.clone();
+        const midSunPos = new THREE.Vector3(20, 30, -60);
+        const endSunPos = new THREE.Vector3(-80, 8, -120);
 
-        const duration = 5000;
-        const start = performance.now();
+        const startAmbient = new THREE.Color(0x8060a0);
+        const endAmbient = new THREE.Color(0xffb080);
 
         const animate = () => {
-            const t = Math.min(1, (performance.now() - start) / duration);
-            const ease = 1 - Math.pow(1 - t, 3);
+            const t = Math.min(1, (performance.now() - startTime) / duration);
+            const ease = t * t * (3 - 2 * t); // smoothstep
 
-            if (ease < 0.5) {
-                const t2 = ease * 2;
-                this.scene.background.copy(startBg).lerp(midBg, t2);
-                this.scene.fog.color.copy(startBg).lerp(midBg, t2);
+            let skyColor, horizonColor, sunColor, sunPos;
+
+            if (ease < 0.25) {
+                // Phase 1: Night → Dusk
+                const p = ease / 0.25;
+                skyColor = skyNight.clone().lerp(skyDusk, p);
+                horizonColor = horizonNight.clone().lerp(horizonDusk, p);
+                sunColor = startSunColor.clone();
+                sunPos = startSunPos.clone();
+            } else if (ease < 0.5) {
+                // Phase 2: Dusk → Warm
+                const p = (ease - 0.25) / 0.25;
+                skyColor = skyDusk.clone().lerp(skyWarm, p);
+                horizonColor = horizonDusk.clone().lerp(horizonWarm, p);
+                sunColor = startSunColor.clone().lerp(endSunColor, p * 0.5);
+                sunPos = startSunPos.clone().lerp(midSunPos, p);
+            } else if (ease < 0.75) {
+                // Phase 3: Warm → Gold
+                const p = (ease - 0.5) / 0.25;
+                skyColor = skyWarm.clone().lerp(skyGold, p);
+                horizonColor = horizonWarm.clone().lerp(horizonGold, p);
+                sunColor = startSunColor.clone().lerp(endSunColor, 0.5 + p * 0.3);
+                sunPos = midSunPos.clone().lerp(endSunPos, p);
             } else {
-                const t2 = (ease - 0.5) * 2;
-                this.scene.background.copy(midBg).lerp(endBg, t2);
-                this.scene.fog.color.copy(midBg).lerp(endBg, t2);
+                // Phase 4: Gold (settled)
+                const p = (ease - 0.75) / 0.25;
+                skyColor = skyGold.clone();
+                horizonColor = horizonGold.clone();
+                sunColor = startSunColor.clone().lerp(endSunColor, 0.8 + p * 0.2);
+                sunPos = endSunPos.clone();
             }
 
-            this.sun.color.copy(startSunColor).lerp(endSunColor, ease);
-            this.sun.position.lerpVectors(startPos, endPos, ease);
+            // Apply sky background
+            this.scene.background.copy(skyColor);
+            this.scene.fog.color.copy(skyColor);
+
+            // Update sky gradient
+            if (this.skyGradient) {
+                this.skyGradient.material.uniforms.topColor.value.copy(skyColor);
+                this.skyGradient.material.uniforms.bottomColor.value.copy(horizonColor);
+            }
+
+            // Update sun
+            this.sun.color.copy(sunColor);
+            this.sun.position.copy(sunPos);
             this.sun.intensity = 1.4 + ease * 0.6;
+
+            // Update ambient light
+            if (this.ambient) {
+                this.ambient.color.copy(startAmbient).lerp(endAmbient, ease);
+            }
+
+            // Stars fading out
+            if (this.stars && this.stars.length > 0) {
+                const starOpacity = 1 - ease * 0.95;
+                this.stars.forEach(star => {
+                    if (star.material) {
+                        star.material.opacity = starOpacity;
+                        star.material.transparent = true;
+                        star.visible = starOpacity > 0.05;
+                    }
+                });
+            }
+
+            // Grass color shift (dark green → warm gold)
+            if (this.grass && this.grass.material) {
+                this.grass.material.color.copy(this.grassBaseColor).lerp(this.grassWarmColor, ease);
+            }
+            if (this.ground && this.ground.material) {
+                this.ground.material.color.copy(this.grassBaseColor).lerp(this.grassWarmColor, ease);
+            }
 
             if (t < 1) requestAnimationFrame(animate);
         };
@@ -884,48 +966,53 @@ export class Game {
             const playerName = this.playerName;
 
             finalPoem.innerHTML = `
-        <p class="poem-line">Sa ilalim ng papalubog na araw,</p>
-        <p class="poem-line">kung saan nagtatagpo ang langit at lupa,</p>
-        <p class="poem-line">narito tayo — ikaw at ako —</p>
-        <p class="poem-line">nakaupo sa damong tahimik.</p>
-        <br/>
-        <p class="poem-line">Hinawakan mo ang aking kamay,</p>
-        <p class="poem-line">at sa sandaling iyon,</p>
-        <p class="poem-line">hindi ko na kailangan ang mga salita —</p>
-        <p class="poem-line">dahil ang iyong mga mata,</p>
-        <p class="poem-line">tulad ng araw na unti-unting lumulubog,</p>
-        <p class="poem-line">ay nagbibigay ng liwanag na hindi kailanman mamamatay.</p>
-        <br/>
-        <p class="poem-line">Gusto kong masaksihan nang lubos</p>
-        <p class="poem-line">kung paano nagbabaga ang ningning ng iyong mga mata</p>
-        <p class="poem-line">sa tuwing ang iyong mga labi ay nakangiti nang wagas —</p>
-        <p class="poem-line">hindi ang ngiting pangharap lamang,</p>
-        <p class="poem-line">kundi ang ngiting nagmumula sa kailaliman ng iyong kaluluwa.</p>
-        <br/>
-        <p class="poem-line">Mahal ko ang mga mata mo,</p>
-        <p class="poem-line">lalo na kapag ito'y kumikinang na tila mga bituin</p>
-        <p class="poem-line">na hindi kayang tapatan ng buong kalawakan.</p>
-        <br/>
-        <p class="poem-line">At habang lumulubog ang araw,</p>
-        <p class="poem-line">at ang langit ay nagiging ginto at rosas,</p>
-        <p class="poem-line">ako ay nananatili —</p>
-        <p class="poem-line">nakatingin sa iyong mga mata,</p>
-        <p class="poem-line">naghihintay ng bawat ngiti,</p>
-        <p class="poem-line">nagsusumamo sa bawat sulyap.</p>
-        <br/>
-        <p class="poem-line final">Kung sakaling ako ang maging dahilan ng ngiting iyon,</p>
-        <p class="poem-line final">ito ang magiging pinakamahalagang sandali ng aking buhay —</p>
-        <p class="poem-line final">ang makita kang masaya,</p>
-        <p class="poem-line final">hindi lamang sa larawan,</p>
-        <p class="poem-line final">kundi sa tunay na mundo —</p>
-        <p class="poem-line final">kasama ako.</p>
-        <br/>
-        <p class="poem-line signature">— ${playerName}, 2026</p>
+      <p class="poem-line">Sa ilalim ng papalubog na araw,</p>
+      <p class="poem-line">kung saan humihinga ang langit sa bisig ng lupa,</p>
+      <p class="poem-line">narito tayo — ikaw at ako —</p>
+      <p class="poem-line">nakaupo sa damong tahimik,</p>
+      <p class="poem-line">pinapanood ang mundo habang unti-unting nagpapaalam ang liwanag.</p>
+      <br/>
+      <p class="poem-line">Hinawakan mo ang aking kamay,</p>
+      <p class="poem-line">at sa sandaling iyon,</p>
+      <p class="poem-line">hindi ko na kailangan ang mga salita —</p>
+      <p class="poem-line">dahil ang iyong mga mata,</p>
+      <p class="poem-line">tulad ng araw na unti-unting lumulubog,</p>
+      <p class="poem-line">ay nagbibigay ng liwanag na hindi kailanman mamamatay.</p>
+      <br/>
+      <p class="poem-line">Ang sobre na iyong iniabot —</p>
+      <p class="poem-line">isang liham na hindi kailangan buksan,</p>
+      <p class="poem-line">dahil ang nilalaman nito ay nakasulat na sa aking puso.</p>
+      <br/>
+      <p class="poem-line">Gusto kong masaksihan nang lubos</p>
+      <p class="poem-line">kung paano nagbabaga ang ningning ng iyong mga mata</p>
+      <p class="poem-line">sa tuwing ang iyong mga labi ay ngumingiti nang wagas —</p>
+      <p class="poem-line">hindi ang ngiting pangharap lamang,</p>
+      <p class="poem-line">kundi ang ngiting nagmumula sa kailaliman ng iyong kaluluwa.</p>
+      <br/>
+      <p class="poem-line">Mahal ko ang mga mata mo,</p>
+      <p class="poem-line">lalo na kapag ito'y kumikinang na tila mga bituin</p>
+      <p class="poem-line">na hindi kayang tapatan ng buong kalawakan.</p>
+      <br/>
+      <p class="poem-line">At habang lumulubog ang araw,</p>
+      <p class="poem-line">at ang langit ay nagiging ginto at rosas,</p>
+      <p class="poem-line">ako ay nananatili —</p>
+      <p class="poem-line">nakatingin sa iyong mga mata,</p>
+      <p class="poem-line">naghihintay ng bawat ngiti,</p>
+      <p class="poem-line">nagsusumamo sa bawat sulyap.</p>
+      <br/>
+      <p class="poem-line final">Kung sakaling ako ang maging dahilan ng ngiting iyon,</p>
+      <p class="poem-line final">ito ang magiging pinakamahalagang sandali ng aking buhay —</p>
+      <p class="poem-line final">ang makita kang masaya,</p>
+      <p class="poem-line final">hindi lamang sa larawan,</p>
+      <p class="poem-line final">kundi sa tunay na mundo —</p>
+      <p class="poem-line final">kasama ako, ang pusa, at ang ating tula.</p>
+      <br/>
+      <p class="poem-line signature">— ${playerName}, 2026</p>
       `;
 
             finalPoem.style.animation = 'none';
             void finalPoem.offsetWidth;
-            finalPoem.style.animation = 'autoScroll 60s linear forwards';
+            finalPoem.style.animation = 'autoScroll 120s linear forwards';
             finalPoem.style.animationDelay = '2s';
         }
     }
@@ -969,6 +1056,17 @@ export class Game {
 
         if (this.butterflies) this.butterflies.update(dt);
         if (this.birds) this.birds.update(dt);
+        if (this.fireflies) this.fireflies.update(dt);
+
+        // Waterfall animation
+        this.scene.traverse(obj => {
+            if (obj.userData.isWaterfall) {
+                const u = obj.userData;
+                const t = performance.now() * 0.001;
+                if (u.stream) u.stream.position.y = u.baseStreamY + Math.sin(t * 2) * 0.15;
+                if (u.stream2) u.stream2.position.y = u.baseStream2Y + Math.sin(t * 2 + 1) * 0.15;
+            }
+        });
 
         this.scene.traverse(obj => {
             if (obj.userData.isFireLight) {
@@ -977,8 +1075,15 @@ export class Game {
         });
 
         if (this.partnerCat?.userData.tail) {
-            this.partnerCat.userData.tail.rotation.z = Math.sin(performance.now() * 0.003) * 0.3;
+            this.partnerCat.userData.tail.rotation.z = Math.sin(performance.now() * 0.003) * 0.4;
         }
+
+        this.scene.traverse(obj => {
+            if (obj.userData.isEnvelope) {
+                const t = performance.now() * 0.002;
+                obj.position.z = 0.3 + Math.sin(t) * 0.02;
+            }
+        });
 
         this.renderer.render(this.scene, this.camera);
     }

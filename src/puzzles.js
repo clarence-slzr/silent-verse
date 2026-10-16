@@ -1,4 +1,4 @@
-// puzzles.js — 7 poems with A/B/C/D multiple choice
+// puzzles.js — 10 harder poems with A/B/C/D multiple choice
 
 export const PUZZLES = [
     {
@@ -81,6 +81,42 @@ ng kahit anong laboratoryo.`,
         question: 'What is the title of this poem?',
         choices: ['Viraha', 'Kundiman sa Gitna ng Dilim', 'Ang Agham ng Iyong Ngiti', 'Haraya'],
         correct: 'Ang Agham ng Iyong Ngiti'
+    },
+    {
+        title: 'Alitaptap',
+        excerpt:
+            `Sa dilim ng gabi, ikaw ang nagbibigay liwanag —
+isang maliit na kislap sa gitna ng kadiliman.
+Hindi mo kailangang maging araw —
+sapat na ang iyong kinang
+upang mahanap kita.`,
+        question: 'What is the title of this poem?',
+        choices: ['Alitaptap', 'Kundiman sa Gitna ng Dilim', 'Viraha', 'XLVI'],
+        correct: 'Alitaptap'
+    },
+    {
+        title: 'Ang Huling Silip',
+        excerpt:
+            `Sa huling silip ng iyong mga mata,
+nakita ko ang buong mundo —
+hindi ang mundo ng mga tao,
+kundi ang mundo ng ating dalawa.
+At doon, ako ay naging buo.`,
+        question: 'What is the title of this poem?',
+        choices: ['Ang Agham ng Iyong Ngiti', 'Ang Huling Silip', 'Viraha', 'Halaga'],
+        correct: 'Ang Huling Silip'
+    },
+    {
+        title: 'Ang Ngiti sa Likod ng Iyong mga Mata',
+        excerpt:
+            `Gusto kong masaksihan nang lubos,
+kung paano nagbabaga ang ningning ng iyong mga mata
+sa tuwing ang iyong mga labi ay nakangiti nang wagas —
+hindi ang ngiting pangharap lamang,
+kundi ang ngiting nagmumula sa kailaliman ng iyong kaluluwa.`,
+        question: 'What is the title of this poem?',
+        choices: ['Viraha', 'Halaga', 'Ang Ngiti sa Likod ng Iyong mga Mata', 'Kundiman sa Gitna ng Dilim'],
+        correct: 'Ang Ngiti sa Likod ng Iyong mga Mata'
     }
 ];
 

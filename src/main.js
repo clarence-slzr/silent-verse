@@ -6,47 +6,41 @@ const game = new Game();
 
 const startScreen = document.getElementById('start-screen');
 const nameInput = document.getElementById('name-input');
+const startBtn = document.getElementById('start-btn');
 
-// ===== CHARACTER SELECTION =====
-document.getElementById('pick-male').addEventListener('click', () => {
-    const name = nameInput.value.trim() || 'Wanderer';
-    startScreen.classList.remove('active');
-    game.start('male', name);
-    setTimeout(() => audio.startBg(), 500);
-});
+// ===== START BUTTON =====
+if (startBtn) {
+    startBtn.addEventListener('click', () => {
+        const name = nameInput.value.trim() || 'Wanderer';
+        startScreen.classList.remove('active');
+        game.start('female', name);
+        setTimeout(() => audio.startBg(), 500);
+    });
+}
 
-document.getElementById('pick-female').addEventListener('click', () => {
-    const name = nameInput.value.trim() || 'Wanderer';
-    startScreen.classList.remove('active');
-    game.start('female', name);
-    setTimeout(() => audio.startBg(), 500);
-});
+// Enter key in name input also starts
+if (nameInput) {
+    nameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && startBtn) {
+            startBtn.click();
+        }
+    });
+}
 
-nameInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') nameInput.blur();
-});
+// ===== MUSIC MENU =====
+const musicToggle = document.getElementById('music-toggle');
+const musicMenu = document.getElementById('music-menu');
+const musicOptions = document.querySelectorAll('.music-option');
+const volumeSlider = document.getElementById('volume-slider');
+const volumeValue = document.getElementById('volume-value');
 
-// ===== MUSIC MENU LOGIC =====
-document.addEventListener('DOMContentLoaded', setupMusicMenu);
-setupMusicMenu();
-
-function setupMusicMenu() {
-    const musicToggle = document.getElementById('music-toggle');
-    const musicMenu = document.getElementById('music-menu');
-    const musicOptions = document.querySelectorAll('.music-option');
-    const volumeSlider = document.getElementById('volume-slider');
-    const volumeValue = document.getElementById('volume-value');
-
-    if (!musicToggle || !musicMenu) return;
-
-    // Toggle menu on click
+if (musicToggle && musicMenu) {
     musicToggle.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
         musicMenu.classList.toggle('show');
     });
 
-    // Song selection
     musicOptions.forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -66,7 +60,6 @@ function setupMusicMenu() {
         });
     });
 
-    // Load saved state
     const savedSong = localStorage.getItem('currentSong');
     if (savedSong !== null) {
         const songId = parseInt(savedSong);
@@ -78,7 +71,6 @@ function setupMusicMenu() {
         musicToggle.classList.add('playing');
     }
 
-    // Volume slider
     if (volumeSlider && volumeValue) {
         const savedVol = localStorage.getItem('musicVolume');
         if (savedVol) {
@@ -93,7 +85,6 @@ function setupMusicMenu() {
         });
     }
 
-    // Close on outside click
     document.addEventListener('click', (e) => {
         if (!musicMenu.contains(e.target) && e.target !== musicToggle) {
             musicMenu.classList.remove('show');
