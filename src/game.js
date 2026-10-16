@@ -2,12 +2,8 @@ import * as THREE from 'three';
 import { audio } from './audio.js';
 import { PUZZLES, FINAL_POEM_URL } from './puzzles.js';
 import {
-    createWorld,
-    createPoemOrbs,
-    createCharacter,
-    createFlower,
-    createButterflies,
-    createBirds
+    createWorld, createPoemOrbs, createCharacter, createCat,
+    createFlower, createButterflies, createBirds
 } from './world.js';
 
 const WALKING_NOTES = [
@@ -26,11 +22,7 @@ const WALKING_NOTES = [
 export class Game {
     constructor() {
         this.canvas = document.getElementById('scene');
-        this.renderer = new THREE.WebGLRenderer({
-            canvas: this.canvas,
-            antialias: true,
-            alpha: false
-        });
+        this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, alpha: false });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         this.renderer.shadowMap.enabled = true;
@@ -41,17 +33,10 @@ export class Game {
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x1a0a2a);
 
-        this.camera = new THREE.PerspectiveCamera(
-            70,
-            window.innerWidth / window.innerHeight,
-            0.1,
-            500
-        );
+        this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
 
-        // Lighting
         const ambient = new THREE.AmbientLight(0x8060a0, 1.0);
         this.scene.add(ambient);
-
         const hemi = new THREE.HemisphereLight(0xc9a0ff, 0x2a3a2a, 0.8);
         this.scene.add(hemi);
 
@@ -66,27 +51,25 @@ export class Game {
         this.sun.shadow.camera.far = 300;
         this.scene.add(this.sun);
 
-        // World
         const worldData = createWorld(this.scene);
         this.getGroundHeight = worldData.getGroundHeight;
         this.collidables = worldData.collidables;
 
-        // Orbs
         this.orbs = createPoemOrbs(this.scene, PUZZLES, this.getGroundHeight);
         this.collectedCount = 0;
 
-        // State
         this.gender = null;
         this.playerName = '';
         this.player = null;
         this.partner = null;
+        this.partnerCat = null;
         this.keys = {};
 
-        // Camera
         this.cameraMode = 'third';
         this.cameraAngle = { yaw: 0, pitch: 0.25 };
         this.firstPersonPitch = 0;
         this.cameraDistance = 6;
+        this.cameraSensitivity = 0.015; // Adjusted for slider (15 / 1000)
 
         this.isRunning = false;
         this.nearOrb = null;
@@ -94,28 +77,24 @@ export class Game {
         this.ended = false;
         this.endingMode = false;
 
-        // Physics
         this.velocityY = 0;
         this.isJumping = false;
         this.groundY = 0;
 
-        // Animation
         this.walkCycle = 0;
-
-        // Lives system (per puzzle)
         this.currentLives = 3;
         this.wrongAnswers = 0;
 
-        // Click-to-move
+        // Joystick input
+        this.joystickInput = { x: 0, y: 0 };
+
         this.moveTarget = null;
         this.moveMarker = null;
 
-        // Notes
         this.noteTimer = 0;
         this.nextNoteTime = 8;
         this.notesContainer = document.getElementById('notes-container');
 
-        // UI
         this.counterEl = document.getElementById('counter');
         this.livesEl = document.getElementById('lives-display');
         this.nameDisplay = document.getElementById('player-name-display');
@@ -130,8 +109,11 @@ export class Game {
         this.cameraToggle = document.getElementById('camera-toggle');
         this.cameraMenu = document.getElementById('camera-menu');
         this.cameraOptions = document.querySelectorAll('.camera-option');
+        this.sensitivitySlider = document.getElementById('sensitivity-slider');
+        this.sensitivityValue = document.getElementById('sensitivity-value');
 
         this.bindEvents();
+        this.setupJoystick();
         this.animate();
     }
 
@@ -143,7 +125,6 @@ export class Game {
         this.groundY = this.player.position.y;
         this.updatePlayerVisibility();
 
-        // Display name
         if (this.nameDisplay) {
             this.nameDisplay.textContent = `— ${this.playerName} —`;
         }
@@ -162,6 +143,72 @@ export class Game {
         if (this.livesEl) this.livesEl.textContent = full + empty;
     }
 
+    // ===== JOYSTICK SETUP =====
+    setupJoystick() {
+        const base = document.getElementById('joystick-base');
+        const knob = document.getElementById('joystick-knob');
+        if (!base || !knob) return;
+
+        let active = false;
+        let baseRect = null;
+        const maxDist = 35; // Max distance knob can move from center
+
+        const startHandler = (e) => {
+            e.preventDefault();
+            active = true;
+            baseRect = base.getBoundingClientRect();
+        };
+
+        const moveHandler = (e) => {
+            if (!active || !baseRect) return;
+            e.preventDefault();
+
+            let clientX, clientY;
+            if (e.touches) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+
+            const centerX = baseRect.left + baseRect.width / 2;
+            const centerY = baseRect.top + baseRect.height / 2;
+
+            let dx = clientX - centerX;
+            let dy = clientY - centerY;
+
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > maxDist) {
+                dx = (dx / dist) * maxDist;
+                dy = (dy / dist) * maxDist;
+            }
+
+            knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+
+            // Normalize input (-1 to 1)
+            this.joystickInput.x = dx / maxDist;
+            this.joystickInput.y = dy / maxDist;
+        };
+
+        const endHandler = (e) => {
+            e.preventDefault();
+            active = false;
+            knob.style.transform = 'translate(-50%, -50%)';
+            this.joystickInput.x = 0;
+            this.joystickInput.y = 0;
+        };
+
+        base.addEventListener('touchstart', startHandler, { passive: false });
+        document.addEventListener('touchmove', moveHandler, { passive: false });
+        document.addEventListener('touchend', endHandler);
+        document.addEventListener('touchcancel', endHandler);
+
+        base.addEventListener('mousedown', startHandler);
+        document.addEventListener('mousemove', moveHandler);
+        document.addEventListener('mouseup', endHandler);
+    }
+
     bindEvents() {
         window.addEventListener('resize', () => {
             this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -169,6 +216,7 @@ export class Game {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
+        // ===== ARROW KEYS + WASD (both supported) =====
         window.addEventListener('keydown', (e) => {
             const k = e.key.toLowerCase();
             this.keys[k] = true;
@@ -189,37 +237,33 @@ export class Game {
 
         this.canvas.addEventListener('click', (e) => {
             if (this.puzzleActive || this.ended) return;
-
             if (this.nearOrb) {
                 this.openPuzzle(this.nearOrb);
                 return;
             }
-
-            const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-            if (isMobile) {
-                this.setMoveTarget(e.clientX, e.clientY);
-                return;
-            }
-
             if (!document.pointerLockElement) {
                 this.canvas.requestPointerLock();
             }
         });
 
+        // Mouse camera rotation
         document.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement === this.canvas) {
+                const sens = this.cameraSensitivity;
                 if (this.cameraMode === 'first') {
-                    this.cameraAngle.yaw -= e.movementX * 0.0022;
-                    this.firstPersonPitch -= e.movementY * 0.0022;
+                    this.cameraAngle.yaw -= e.movementX * sens;
+                    this.firstPersonPitch -= e.movementY * sens;
                     this.firstPersonPitch = Math.max(-1.2, Math.min(1.2, this.firstPersonPitch));
                 } else {
-                    this.cameraAngle.yaw -= e.movementX * 0.0025;
-                    this.cameraAngle.pitch -= e.movementY * 0.0025;
+                    this.cameraAngle.yaw -= e.movementX * sens;
+                    this.cameraAngle.pitch -= e.movementY * sens;
                     this.cameraAngle.pitch = Math.max(-0.3, Math.min(0.9, this.cameraAngle.pitch));
                 }
             }
         });
 
+        // Mobile: swipe to rotate camera (on canvas)
+        let touchStart = null;
         this.canvas.addEventListener('touchstart', (e) => {
             if (this.puzzleActive || this.ended) return;
             const touch = e.touches[0];
@@ -227,15 +271,28 @@ export class Game {
                 this.openPuzzle(this.nearOrb);
                 return;
             }
-            this.setMoveTarget(touch.clientX, touch.clientY);
+            touchStart = { x: touch.clientX, y: touch.clientY, time: Date.now() };
         }, { passive: true });
 
+        this.canvas.addEventListener('touchmove', (e) => {
+            if (!touchStart || this.puzzleActive) return;
+            const touch = e.touches[0];
+            const dx = touch.clientX - touchStart.x;
+            const dy = touch.clientY - touchStart.y;
+            this.cameraAngle.yaw -= dx * this.cameraSensitivity * 0.5;
+            this.cameraAngle.pitch -= dy * this.cameraSensitivity * 0.5;
+            this.cameraAngle.pitch = Math.max(-0.3, Math.min(0.9, this.cameraAngle.pitch));
+            touchStart = { x: touch.clientX, y: touch.clientY };
+        }, { passive: true });
+
+        this.canvas.addEventListener('touchend', () => {
+            touchStart = null;
+        });
+
+        // Jump button (mobile)
         const jumpBtn = document.getElementById('jump-btn');
         if (jumpBtn) {
-            jumpBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                this.jump();
-            });
+            jumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); this.jump(); });
             jumpBtn.addEventListener('click', () => this.jump());
         }
 
@@ -248,7 +305,6 @@ export class Game {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.setCameraMode(btn.dataset.mode);
-                this.cameraMenu.classList.remove('show');
             });
         });
 
@@ -257,6 +313,27 @@ export class Game {
                 this.cameraMenu.classList.remove('show');
             }
         });
+
+        // Sensitivity slider
+        if (this.sensitivitySlider) {
+            const saved = localStorage.getItem('cameraSensitivity');
+            if (saved) {
+                this.cameraSensitivity = parseFloat(saved);
+                this.sensitivitySlider.value = this.cameraSensitivity * 1000;
+                if (this.sensitivityValue) {
+                    this.sensitivityValue.textContent = Math.round(this.cameraSensitivity * 1000);
+                }
+            }
+
+            this.sensitivitySlider.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value) / 1000;
+                this.cameraSensitivity = val;
+                if (this.sensitivityValue) {
+                    this.sensitivityValue.textContent = e.target.value;
+                }
+                localStorage.setItem('cameraSensitivity', val);
+            });
+        }
 
         document.getElementById('close-puzzle').addEventListener('click', () => this.closePuzzle());
 
@@ -274,51 +351,10 @@ export class Game {
 
     setCameraMode(mode) {
         this.cameraMode = mode;
-        this.cameraOptions.forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.mode === mode);
-        });
-        if (mode === 'first') {
-            this.firstPersonPitch = 0;
-        } else {
-            this.cameraAngle.pitch = 0.25;
-        }
+        this.cameraOptions.forEach(btn => btn.classList.toggle('active', btn.dataset.mode === mode));
+        if (mode === 'first') this.firstPersonPitch = 0;
+        else this.cameraAngle.pitch = 0.25;
         this.updatePlayerVisibility();
-    }
-
-    setMoveTarget(clientX, clientY) {
-        if (!this.player || !this.camera) return;
-        const rect = this.canvas.getBoundingClientRect();
-        const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
-        const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1;
-
-        const raycaster = new THREE.Raycaster();
-        raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this.camera);
-
-        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.groundY);
-        const point = new THREE.Vector3();
-        if (raycaster.ray.intersectPlane(plane, point)) {
-            this.moveTarget = point;
-            this.showMoveMarker(point);
-        }
-    }
-
-    showMoveMarker(pos) {
-        if (!this.moveMarker) {
-            const geo = new THREE.RingGeometry(0.4, 0.6, 32);
-            const mat = new THREE.MeshBasicMaterial({
-                color: 0xc9a0ff, transparent: true, opacity: 0.8, side: THREE.DoubleSide
-            });
-            this.moveMarker = new THREE.Mesh(geo, mat);
-            this.moveMarker.rotation.x = -Math.PI / 2;
-            this.scene.add(this.moveMarker);
-        }
-        this.moveMarker.position.set(pos.x, this.getGroundHeight(pos.x, pos.z) + 0.05, pos.z);
-        this.moveMarker.visible = true;
-
-        clearTimeout(this._markerTimeout);
-        this._markerTimeout = setTimeout(() => {
-            if (this.moveMarker) this.moveMarker.visible = false;
-        }, 1500);
     }
 
     jump() {
@@ -327,34 +363,30 @@ export class Game {
         this.isJumping = true;
     }
 
+    // ===== MOVEMENT (ARROW KEYS + WASD + JOYSTICK) =====
     updatePlayer(dt) {
         if (!this.player || this.puzzleActive || this.ended) return;
 
         const speed = this.isRunning ? 12 : 6;
-        const forward = new THREE.Vector3(
-            -Math.sin(this.cameraAngle.yaw), 0, -Math.cos(this.cameraAngle.yaw)
-        );
-        const right = new THREE.Vector3(
-            -Math.cos(this.cameraAngle.yaw), 0, Math.sin(this.cameraAngle.yaw)
-        );
+
+        // Base directions (world-relative)
+        const forward = new THREE.Vector3(0, 0, -1);
+        const backward = new THREE.Vector3(0, 0, 1);
+        const left = new THREE.Vector3(-1, 0, 0);
+        const right = new THREE.Vector3(1, 0, 0);
 
         let move = new THREE.Vector3();
 
-        if (this.keys['w'] || this.keys['arrowup']) move.add(forward);
-        if (this.keys['s'] || this.keys['arrowdown']) move.sub(forward);
-        if (this.keys['a'] || this.keys['arrowleft']) move.sub(right);
-        if (this.keys['d'] || this.keys['arrowright']) move.add(right);
+        // Arrow keys + WASD
+        if (this.keys['arrowup'] || this.keys['w']) move.add(forward);
+        if (this.keys['arrowdown'] || this.keys['s']) move.add(backward);
+        if (this.keys['arrowleft'] || this.keys['a']) move.add(left);
+        if (this.keys['arrowright'] || this.keys['d']) move.add(right);
 
-        if (move.length() === 0 && this.moveTarget) {
-            const dir = new THREE.Vector3(
-                this.moveTarget.x - this.player.position.x, 0,
-                this.moveTarget.z - this.player.position.z
-            );
-            if (dir.length() > 0.5) {
-                move = dir.normalize();
-            } else {
-                this.moveTarget = null;
-            }
+        // Joystick input
+        if (Math.abs(this.joystickInput.x) > 0.15 || Math.abs(this.joystickInput.y) > 0.15) {
+            move.x += this.joystickInput.x;
+            move.z += this.joystickInput.y;
         }
 
         const isMoving = move.length() > 0;
@@ -368,16 +400,12 @@ export class Game {
                 const dx = next.x - c.x;
                 const dz = next.z - c.z;
                 const dist = Math.sqrt(dx * dx + dz * dz);
-                if (dist < c.radius + 0.4) {
-                    blocked = true;
-                    break;
-                }
+                if (dist < c.radius + 0.4) { blocked = true; break; }
             }
 
             if (!blocked) {
                 next.y = this.getGroundHeight(next.x, next.z);
-                const maxR = 95;
-                if (next.length() < maxR) {
+                if (next.length() < 95) {
                     this.player.position.x = next.x;
                     this.player.position.z = next.z;
                 }
@@ -402,7 +430,6 @@ export class Game {
             this.player.position.y = groundY;
         }
 
-        // 3D Walk animation
         const u = this.player.userData;
         if (isMoving && !this.isJumping) {
             this.walkCycle += dt * (this.isRunning ? 14 : 9);
@@ -441,7 +468,6 @@ export class Game {
                 new THREE.Vector3(this.player.position.x, eyeHeight, this.player.position.z),
                 1 - Math.pow(0.0001, dt)
             );
-
             const dir = new THREE.Vector3(
                 -Math.sin(this.cameraAngle.yaw) * Math.cos(this.firstPersonPitch),
                 Math.sin(this.firstPersonPitch),
@@ -455,15 +481,11 @@ export class Game {
         } else {
             const targetY = this.player.position.y + 1.2;
             const dist = this.cameraDistance;
-
             const camX = this.player.position.x + Math.sin(this.cameraAngle.yaw) * dist;
             const camZ = this.player.position.z + Math.cos(this.cameraAngle.yaw) * dist;
             const camY = targetY + 2.5 + this.cameraAngle.pitch * 5;
 
-            this.camera.position.lerp(
-                new THREE.Vector3(camX, camY, camZ),
-                1 - Math.pow(0.001, dt)
-            );
+            this.camera.position.lerp(new THREE.Vector3(camX, camY, camZ), 1 - Math.pow(0.001, dt));
             this.camera.lookAt(this.player.position.x, targetY, this.player.position.z);
         }
     }
@@ -476,7 +498,6 @@ export class Game {
 
         this.orbs.forEach((orb) => {
             if (orb.userData.collected) return;
-
             orb.userData.time += dt;
             orb.position.y = orb.userData.baseY + Math.sin(t * 1.5 + orb.userData.time) * 0.2;
             orb.rotation.y += dt * 0.5;
@@ -484,10 +505,7 @@ export class Game {
             orb.userData.shell.rotation.z += dt * 0.4;
 
             const dist = orb.position.distanceTo(this.player.position);
-            if (dist < nearestDist) {
-                nearestDist = dist;
-                this.nearOrb = orb;
-            }
+            if (dist < nearestDist) { nearestDist = dist; this.nearOrb = orb; }
         });
 
         if (this.nearOrb && !this.puzzleActive && !this.ended) {
@@ -505,9 +523,7 @@ export class Game {
         note.className = 'note';
         note.textContent = text;
         this.notesContainer.appendChild(note);
-        setTimeout(() => {
-            if (note.parentNode) note.parentNode.removeChild(note);
-        }, 4200);
+        setTimeout(() => { if (note.parentNode) note.parentNode.removeChild(note); }, 4200);
     }
 
     openPuzzle(orb) {
@@ -516,7 +532,6 @@ export class Game {
         this.currentOrb = orb;
         document.exitPointerLock?.();
 
-        // Reset lives for this puzzle
         this.currentLives = 3;
         this.wrongAnswers = 0;
         this.updateLivesDisplay();
@@ -553,7 +568,6 @@ export class Game {
             this.puzzleChoices.querySelectorAll('button').forEach(b => b.disabled = true);
             setTimeout(() => this.solvePuzzle(this.currentOrb), 900);
         } else {
-            // Wrong answer
             btn.classList.add('wrong');
             btn.disabled = true;
             this.currentLives--;
@@ -562,7 +576,6 @@ export class Game {
             audio.wrong();
 
             if (this.currentLives <= 0) {
-                // Out of lives — orb disappears and relocates
                 this.puzzleFeedback.textContent = '💔 Out of lives! The poem fades away... Find it elsewhere.';
                 this.puzzleFeedback.className = 'feedback err';
                 this.puzzleChoices.querySelectorAll('button').forEach(b => b.disabled = true);
@@ -579,9 +592,7 @@ export class Game {
     }
 
     relocateOrb(orb) {
-        // Pick new random position, away from player
-        let newX, newZ, newY;
-        let attempts = 0;
+        let newX, newZ, newY, attempts = 0;
         do {
             const angle = Math.random() * Math.PI * 2;
             const radius = 30 + Math.random() * 60;
@@ -589,23 +600,16 @@ export class Game {
             newZ = Math.sin(angle) * radius;
             newY = this.getGroundHeight(newX, newZ);
             attempts++;
-        } while (
-            this.player &&
-            Math.hypot(newX - this.player.position.x, newZ - this.player.position.z) < 15 &&
-            attempts < 20
-        );
+        } while (this.player && Math.hypot(newX - this.player.position.x, newZ - this.player.position.z) < 15 && attempts < 20);
 
         orb.position.set(newX, newY + 1.5, newZ);
         orb.userData.baseY = newY + 1.5;
 
-        // Add a small note showing relocation
         const note = document.createElement('div');
         note.className = 'note';
         note.textContent = '✨ The poem moved to a new place...';
         this.notesContainer.appendChild(note);
-        setTimeout(() => {
-            if (note.parentNode) note.parentNode.removeChild(note);
-        }, 4200);
+        setTimeout(() => { if (note.parentNode) note.parentNode.removeChild(note); }, 4200);
     }
 
     solvePuzzle(orb) {
@@ -639,6 +643,7 @@ export class Game {
         this.updateLivesDisplay();
     }
 
+    // ===== CINEMATIC ENDING =====
     startEnding() {
         this.ended = true;
         this.endingMode = true;
@@ -646,8 +651,8 @@ export class Game {
         this.cameraMenu.classList.remove('show');
 
         const endX = 0, endZ = 0;
-        this.player.position.set(endX - 0.7, this.getGroundHeight(endX - 0.7, endZ), endZ);
-        this.player.rotation.y = Math.PI;
+        this.player.position.set(endX - 8, this.getGroundHeight(endX - 8, endZ), endZ);
+        this.player.rotation.y = Math.PI / 2;
         this.player.visible = true;
 
         const u = this.player.userData;
@@ -658,47 +663,105 @@ export class Game {
 
         const partnerGender = this.gender === 'male' ? 'female' : 'male';
         this.partner = createCharacter(this.scene, partnerGender);
-        this.partner.position.set(endX + 0.7, this.getGroundHeight(endX + 0.7, endZ), endZ);
-        this.partner.rotation.y = Math.PI;
+        this.partner.position.set(endX + 8, this.getGroundHeight(endX + 8, endZ), endZ);
+        this.partner.rotation.y = -Math.PI / 2;
+
+        this.partnerCat = createCat(this.partner, true);
 
         this.flower = createFlower();
-        this.flower.position.set(0, this.getGroundHeight(0, -1.5) + 1, -1.5);
-        this.flower.visible = false;
-        this.scene.add(this.flower);
+        this.flower.position.set(-0.5, 1.2, 0.35);
+        this.player.add(this.flower);
 
         this.animateSunset();
-
-        setTimeout(() => {
-            this.flower.visible = true;
-            audio.endingChime();
-            this.flowerAnimation();
-        }, 2000);
-
-        setTimeout(() => this.spawnEndingEffects(), 4000);
-        setTimeout(() => this.sitDownAnimation(), 5500);
-        setTimeout(() => this.showEndingUI(), 8000);
+        this.runEndingSequence();
     }
 
-    flowerAnimation() {
-        const startY = this.flower.position.y;
-        const startZ = this.flower.position.z;
-        const targetY = this.player.position.y + 1.2;
-        const targetZ = this.player.position.z - 0.8;
-        const duration = 2000;
+    runEndingSequence() {
+        const walkDuration = 3500;
+        const startTime = performance.now();
+
+        const walkPhase = () => {
+            const t = Math.min(1, (performance.now() - startTime) / walkDuration);
+            const ease = 1 - Math.pow(1 - t, 3);
+
+            const playerStartX = -8;
+            const playerTargetX = -1.2;
+            this.player.position.x = playerStartX + (playerTargetX - playerStartX) * ease;
+
+            const partnerStartX = 8;
+            const partnerTargetX = 1.2;
+            this.partner.position.x = partnerStartX + (partnerTargetX - partnerStartX) * ease;
+
+            const walkCycle = performance.now() * 0.012;
+            const swing = Math.sin(walkCycle);
+
+            const uP = this.player.userData;
+            if (uP.leftArm) uP.leftArm.rotation.x = swing * 0.7;
+            if (uP.rightArm) uP.rightArm.rotation.x = -swing * 0.7;
+            if (uP.leftLeg) uP.leftLeg.rotation.x = -swing * 0.6;
+            if (uP.rightLeg) uP.rightLeg.rotation.x = swing * 0.6;
+
+            const uPtn = this.partner.userData;
+            if (uPtn.leftArm) uPtn.leftArm.rotation.x = -swing * 0.7;
+            if (uPtn.rightArm) uPtn.rightArm.rotation.x = swing * 0.7;
+            if (uPtn.leftLeg) uPtn.leftLeg.rotation.x = swing * 0.6;
+            if (uPtn.rightLeg) uPtn.rightLeg.rotation.x = -swing * 0.6;
+
+            if (t < 1) requestAnimationFrame(walkPhase);
+            else {
+                const resetLimbs = (u) => {
+                    if (u.leftArm) u.leftArm.rotation.x = 0;
+                    if (u.rightArm) u.rightArm.rotation.x = 0;
+                    if (u.leftLeg) u.leftLeg.rotation.x = 0;
+                    if (u.rightLeg) u.rightLeg.rotation.x = 0;
+                };
+                resetLimbs(uP);
+                resetLimbs(uPtn);
+                setTimeout(() => this.giveFlowerPhase(), 500);
+            }
+        };
+        walkPhase();
+    }
+
+    giveFlowerPhase() {
+        const startPos = new THREE.Vector3(-0.5, 1.2, 0.35);
+        const duration = 1500;
         const start = performance.now();
+
+        this.player.remove(this.flower);
+        this.scene.add(this.flower);
+        this.flower.position.copy(this.player.position).add(startPos);
 
         const animate = () => {
             const t = Math.min(1, (performance.now() - start) / duration);
             const ease = 1 - Math.pow(1 - t, 3);
-            this.flower.position.y = startY + (targetY - startY) * ease;
-            this.flower.position.z = startZ + (targetZ - startZ) * ease;
-            this.flower.rotation.y += 0.03;
+
+            const targetWorld = new THREE.Vector3(
+                this.partner.position.x - 0.5,
+                this.partner.position.y + 1.2,
+                this.partner.position.z + 0.35
+            );
+
+            const currentPos = this.flower.position.clone().lerp(targetWorld, ease);
+            currentPos.y += Math.sin(t * Math.PI) * 0.5;
+            this.flower.position.copy(currentPos);
+            this.flower.rotation.y += 0.05;
+
             if (t < 1) requestAnimationFrame(animate);
+            else {
+                this.scene.remove(this.flower);
+                this.flower.position.set(-0.5, 1.2, 0.35);
+                this.partner.add(this.flower);
+                setTimeout(() => this.sitDownPhase(), 800);
+            }
         };
         animate();
     }
 
-    sitDownAnimation() {
+    sitDownPhase() {
+        this.player.rotation.y = Math.PI;
+        this.partner.rotation.y = Math.PI;
+
         const sitOffset = -0.5;
         const duration = 1500;
         const start = performance.now();
@@ -711,6 +774,10 @@ export class Game {
             this.player.position.y = startY1 + sitOffset * ease;
             this.partner.position.y = startY2 + sitOffset * ease;
             if (t < 1) requestAnimationFrame(animate);
+            else {
+                this.spawnEndingEffects();
+                this.showEndingUI();
+            }
         };
         animate();
     }
@@ -718,7 +785,6 @@ export class Game {
     spawnEndingEffects() {
         this.butterflies = createButterflies(25);
         this.scene.add(this.butterflies.group);
-
         this.birds = createBirds(10);
         this.scene.add(this.birds.group);
     }
@@ -763,6 +829,51 @@ export class Game {
     showEndingUI() {
         const endingScreen = document.getElementById('ending-screen');
         endingScreen.classList.add('active');
+
+        const finalPoem = document.getElementById('final-poem-text');
+        if (finalPoem) {
+            const playerName = this.playerName;
+
+            finalPoem.innerHTML = `
+        <p class="poem-line">Sa ilalim ng papalubog na araw,</p>
+        <p class="poem-line">kung saan nagtatagpo ang langit at lupa,</p>
+        <p class="poem-line">narito tayo — ikaw at ako —</p>
+        <p class="poem-line">nakaupo sa damong tahimik.</p>
+        <br/>
+        <p class="poem-line">Hinawakan mo ang aking kamay,</p>
+        <p class="poem-line">at sa sandaling iyon,</p>
+        <p class="poem-line">hindi ko na kailangan ang mga salita —</p>
+        <p class="poem-line">dahil ang iyong mga mata,</p>
+        <p class="poem-line">tulad ng araw na unti-unting lumulubog,</p>
+        <p class="poem-line">ay nagbibigay ng liwanag na hindi kailanman mamamatay.</p>
+        <br/>
+        <p class="poem-line">Gusto kong masaksihan nang lubos</p>
+        <p class="poem-line">kung paano nagbabaga ang ningning ng iyong mga mata</p>
+        <p class="poem-line">sa tuwing ang iyong mga labi ay nakangiti nang wagas —</p>
+        <p class="poem-line">hindi ang ngiting pangharap lamang,</p>
+        <p class="poem-line">kundi ang ngiting nagmumula sa kailaliman ng iyong kaluluwa.</p>
+        <br/>
+        <p class="poem-line">Mahal ko ang mga mata mo,</p>
+        <p class="poem-line">lalo na kapag ito'y kumikinang na tila mga bituin</p>
+        <p class="poem-line">na hindi kayang tapatan ng buong kalawakan.</p>
+        <br/>
+        <p class="poem-line">At habang lumulubog ang araw,</p>
+        <p class="poem-line">at ang langit ay nagiging ginto at rosas,</p>
+        <p class="poem-line">ako ay nananatili —</p>
+        <p class="poem-line">nakatingin sa iyong mga mata,</p>
+        <p class="poem-line">naghihintay ng bawat ngiti,</p>
+        <p class="poem-line">nagsusumamo sa bawat sulyap.</p>
+        <br/>
+        <p class="poem-line final">Kung sakaling ako ang maging dahilan ng ngiting iyon,</p>
+        <p class="poem-line final">ito ang magiging pinakamahalagang sandali ng aking buhay —</p>
+        <p class="poem-line final">ang makita kang masaya,</p>
+        <p class="poem-line final">hindi lamang sa larawan,</p>
+        <p class="poem-line final">kundi sa tunay na mundo —</p>
+        <p class="poem-line final">kasama ako.</p>
+        <br/>
+        <p class="poem-line signature">— ${playerName}, 2026</p>
+      `;
+        }
     }
 
     updateEndingCamera(dt) {
@@ -771,12 +882,12 @@ export class Game {
         const midX = (this.player.position.x + (this.partner?.position.x || 0)) / 2;
         const midZ = (this.player.position.z + (this.partner?.position.z || 0)) / 2;
 
-        const targetX = midX;
-        const targetZ = midZ + 7;
-        const targetY = this.getGroundHeight(midX, midZ) + 3;
+        const targetX = midX + 1;
+        const targetZ = midZ + 8;
+        const targetY = this.getGroundHeight(midX, midZ) + 3.5;
 
         this.camera.position.lerp(new THREE.Vector3(targetX, targetY, targetZ), 1 - Math.pow(0.001, dt));
-        this.camera.lookAt(midX, this.getGroundHeight(midX, midZ) + 1.2, midZ - 30);
+        this.camera.lookAt(midX, this.getGroundHeight(midX, midZ) + 1.2, midZ - 20);
     }
 
     animate() {
@@ -805,12 +916,15 @@ export class Game {
         if (this.butterflies) this.butterflies.update(dt);
         if (this.birds) this.birds.update(dt);
 
-        // Animate campfire light
         this.scene.traverse(obj => {
             if (obj.userData.isFireLight) {
                 obj.intensity = 2.5 + Math.sin(performance.now() * 0.005) * 0.8;
             }
         });
+
+        if (this.partnerCat?.userData.tail) {
+            this.partnerCat.userData.tail.rotation.z = Math.sin(performance.now() * 0.003) * 0.3;
+        }
 
         this.renderer.render(this.scene, this.camera);
     }

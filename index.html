@@ -35,6 +35,11 @@
         <div id="camera-menu" class="camera-menu">
             <button class="camera-option active" data-mode="third">🎥 Third Person</button>
             <button class="camera-option" data-mode="first">👁 First Person (POV)</button>
+
+            <div class="sensitivity-control">
+                <label for="sensitivity-slider">🖱️ Camera Speed: <span id="sensitivity-value">15</span></label>
+                <input type="range" id="sensitivity-slider" min="3" max="50" step="1" value="15" />
+            </div>
         </div>
 
         <!-- Floating notes -->
@@ -77,7 +82,7 @@
                         <span>Woman</span>
                     </button>
                 </div>
-                <p class="hint-audio">💡 Tip: Click the screen first to start the music.</p>
+                <p class="hint-audio">💡 <b>Tap or click anywhere</b> on the ground to move your character.</p>
             </div>
         </div>
 
@@ -94,15 +99,17 @@
             </div>
         </div>
 
-        <!-- ENDING SCREEN -->
+        <!-- ENDING SCREEN — AUTO SCROLL POEM -->
         <div id="ending-screen" class="screen">
-            <div class="ending-content">
-                <p class="ending-caption">Together at last.</p>
-                <button id="final-poem-btn" class="final-poem-btn">
-                    📖 Tap to read the final poem
-                </button>
+            <div id="ending-poem-scroll">
+                <div id="final-poem-text"></div>
             </div>
-            <button id="restart-btn">Relive the Journey</button>
+            <div class="ending-actions">
+                <button id="final-poem-btn" class="final-poem-btn">
+                    📖 Read the Full Poem
+                </button>
+                <button id="restart-btn">Relive the Journey</button>
+            </div>
         </div>
     </div>
 

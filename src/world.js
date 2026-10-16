@@ -44,12 +44,13 @@ export function createWorld(scene) {
     }
     world.add(grass);
 
-    // Stars in the sky
+    // Stars
     const starGeo = new THREE.SphereGeometry(0.15, 6, 6);
-    const starMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     for (let i = 0; i < 200; i++) {
-        const star = new THREE.Mesh(starGeo, starMat.clone());
-        star.material.color.setHex([0xffffff, 0xffe0a0, 0xa0d8ff, 0xffb3d9][Math.floor(Math.random() * 4)]);
+        const starMat = new THREE.MeshBasicMaterial({
+            color: [0xffffff, 0xffe0a0, 0xa0d8ff, 0xffb3d9][Math.floor(Math.random() * 4)]
+        });
+        const star = new THREE.Mesh(starGeo, starMat);
         const angle = Math.random() * Math.PI * 2;
         const radius = 80 + Math.random() * 150;
         const height = 40 + Math.random() * 60;
@@ -58,10 +59,8 @@ export function createWorld(scene) {
         world.add(star);
     }
 
-    // Collidables
     const collidables = [];
 
-    // Trees
     for (let i = 0; i < 40; i++) {
         const angle = Math.random() * Math.PI * 2;
         const radius = 20 + Math.random() * 70;
@@ -73,7 +72,6 @@ export function createWorld(scene) {
         collidables.push({ x, z, radius: 1.2 });
     }
 
-    // Rocks
     for (let i = 0; i < 30; i++) {
         const angle = Math.random() * Math.PI * 2;
         const radius = 15 + Math.random() * 80;
@@ -91,7 +89,6 @@ export function createWorld(scene) {
         collidables.push({ x, z, radius: size });
     }
 
-    // Glowing flowers
     for (let i = 0; i < 60; i++) {
         const angle = Math.random() * Math.PI * 2;
         const radius = 5 + Math.random() * 90;
@@ -111,19 +108,19 @@ export function createWorld(scene) {
         world.add(light);
     }
 
-    // ===== DUYAN (Swing on tree) =====
+    // Swing
     const swingPos = { x: 35, z: -25 };
     const swingY = Math.sin(swingPos.x * 0.05) * Math.cos(swingPos.z * 0.05) * 1.5;
     world.add(createSwing(swingPos.x, swingY, swingPos.z));
     collidables.push({ x: swingPos.x, z: swingPos.z, radius: 1.5 });
 
-    // ===== CAMPING AREA (Campfire) =====
+    // Campfire
     const campPos = { x: -45, z: 35 };
     const campY = Math.sin(campPos.x * 0.05) * Math.cos(campPos.z * 0.05) * 1.5;
     world.add(createCampfire(campPos.x, campY, campPos.z));
     collidables.push({ x: campPos.x, z: campPos.z, radius: 1.8 });
 
-    // ===== BAHAY (House) =====
+    // House
     const housePos = { x: 60, z: 40 };
     const houseY = Math.sin(housePos.x * 0.05) * Math.cos(housePos.z * 0.05) * 1.5;
     world.add(createHouse(housePos.x, houseY, housePos.z));
@@ -150,8 +147,7 @@ function createTree(x, y, z) {
     const foliageMat = new THREE.MeshStandardMaterial({ color: 0x4d7b4d, roughness: 1, flatShading: true });
     for (let i = 0; i < 3; i++) {
         const foliage = new THREE.Mesh(
-            new THREE.IcosahedronGeometry(1.6 - i * 0.3, 0),
-            foliageMat
+            new THREE.IcosahedronGeometry(1.6 - i * 0.3, 0), foliageMat
         );
         foliage.position.y = 4 + i * 1.1;
         foliage.rotation.set(Math.random(), Math.random(), Math.random());
@@ -165,11 +161,8 @@ function createTree(x, y, z) {
     return group;
 }
 
-// ===== SWING (Duyan) =====
 function createSwing(x, y, z) {
     const group = new THREE.Group();
-
-    // Tree trunk
     const trunk = new THREE.Mesh(
         new THREE.CylinderGeometry(0.35, 0.55, 5, 6),
         new THREE.MeshStandardMaterial({ color: 0x4a3428, roughness: 1, flatShading: true })
@@ -178,19 +171,13 @@ function createSwing(x, y, z) {
     trunk.castShadow = true;
     group.add(trunk);
 
-    // Foliage
     const foliageMat = new THREE.MeshStandardMaterial({ color: 0x4d7b4d, roughness: 1, flatShading: true });
     for (let i = 0; i < 3; i++) {
-        const foliage = new THREE.Mesh(
-            new THREE.IcosahedronGeometry(1.8 - i * 0.35, 0),
-            foliageMat
-        );
+        const foliage = new THREE.Mesh(new THREE.IcosahedronGeometry(1.8 - i * 0.35, 0), foliageMat);
         foliage.position.y = 5 + i * 1.2;
-        foliage.rotation.set(Math.random(), Math.random(), Math.random());
         group.add(foliage);
     }
 
-    // Branch
     const branch = new THREE.Mesh(
         new THREE.CylinderGeometry(0.12, 0.12, 3, 6),
         new THREE.MeshStandardMaterial({ color: 0x4a3428, roughness: 1 })
@@ -199,7 +186,6 @@ function createSwing(x, y, z) {
     branch.rotation.z = Math.PI / 2.2;
     group.add(branch);
 
-    // Ropes
     const ropeMat = new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 1 });
     const rope1 = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.5, 4), ropeMat);
     rope1.position.set(2.7, 4.2, 0.3);
@@ -208,7 +194,6 @@ function createSwing(x, y, z) {
     rope2.position.set(2.7, 4.2, -0.3);
     group.add(rope2);
 
-    // Seat
     const seat = new THREE.Mesh(
         new THREE.BoxGeometry(0.9, 0.1, 0.5),
         new THREE.MeshStandardMaterial({ color: 0x8a5a3a, roughness: 0.9, flatShading: true })
@@ -218,29 +203,21 @@ function createSwing(x, y, z) {
     group.add(seat);
 
     group.position.set(x, y, z);
-    group.userData.isSwing = true;
     return group;
 }
 
-// ===== CAMPFIRE =====
 function createCampfire(x, y, z) {
     const group = new THREE.Group();
-
-    // Logs
     const logMat = new THREE.MeshStandardMaterial({ color: 0x3a2418, roughness: 1, flatShading: true });
     for (let i = 0; i < 6; i++) {
         const angle = (i / 6) * Math.PI * 2;
-        const log = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.15, 0.15, 1.2, 6),
-            logMat
-        );
+        const log = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1.2, 6), logMat);
         log.position.set(Math.cos(angle) * 0.4, 0.3, Math.sin(angle) * 0.4);
         log.rotation.z = Math.PI / 2.5;
         log.rotation.y = angle;
         group.add(log);
     }
 
-    // Fire
     const fire1 = new THREE.Mesh(
         new THREE.ConeGeometry(0.35, 0.8, 6),
         new THREE.MeshBasicMaterial({ color: 0xff6020, transparent: true, opacity: 0.9 })
@@ -255,25 +232,19 @@ function createCampfire(x, y, z) {
     fire2.position.y = 1.0;
     group.add(fire2);
 
-    // Fire light
     const fireLight = new THREE.PointLight(0xff8040, 3, 15);
     fireLight.position.y = 1.2;
     fireLight.userData.isFireLight = true;
     group.add(fireLight);
 
-    // Stones around
     const stoneMat = new THREE.MeshStandardMaterial({ color: 0x554466, roughness: 0.9, flatShading: true });
     for (let i = 0; i < 8; i++) {
         const angle = (i / 8) * Math.PI * 2;
-        const stone = new THREE.Mesh(
-            new THREE.DodecahedronGeometry(0.22, 0),
-            stoneMat
-        );
+        const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22, 0), stoneMat);
         stone.position.set(Math.cos(angle) * 1.1, 0.15, Math.sin(angle) * 1.1);
         group.add(stone);
     }
 
-    // Tent (small)
     const tentBody = new THREE.Mesh(
         new THREE.ConeGeometry(1.2, 1.6, 4),
         new THREE.MeshStandardMaterial({ color: 0x5a8a4a, roughness: 1, flatShading: true })
@@ -283,15 +254,12 @@ function createCampfire(x, y, z) {
     group.add(tentBody);
 
     group.position.set(x, y, z);
-    group.userData.isCampfire = true;
     return group;
 }
 
-// ===== HOUSE =====
 function createHouse(x, y, z) {
     const group = new THREE.Group();
 
-    // Walls
     const wallMat = new THREE.MeshStandardMaterial({ color: 0xa08070, roughness: 0.9, flatShading: true });
     const walls = new THREE.Mesh(new THREE.BoxGeometry(4, 2.5, 4), wallMat);
     walls.position.y = 1.25;
@@ -299,7 +267,6 @@ function createHouse(x, y, z) {
     walls.receiveShadow = true;
     group.add(walls);
 
-    // Roof
     const roofMat = new THREE.MeshStandardMaterial({ color: 0x8a3a2a, roughness: 0.9, flatShading: true });
     const roof = new THREE.Mesh(new THREE.ConeGeometry(3.2, 2, 4), roofMat);
     roof.position.y = 3.5;
@@ -307,13 +274,11 @@ function createHouse(x, y, z) {
     roof.castShadow = true;
     group.add(roof);
 
-    // Door
     const doorMat = new THREE.MeshStandardMaterial({ color: 0x3a2418, roughness: 1 });
     const door = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.6, 0.1), doorMat);
     door.position.set(0, 0.8, 2.05);
     group.add(door);
 
-    // Windows
     const windowMat = new THREE.MeshBasicMaterial({ color: 0xffe0a0 });
     const win1 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.1), windowMat);
     win1.position.set(-1.4, 1.5, 2.05);
@@ -322,17 +287,14 @@ function createHouse(x, y, z) {
     win2.position.set(1.4, 1.5, 2.05);
     group.add(win2);
 
-    // Window light
     const winLight = new THREE.PointLight(0xffe0a0, 2, 8);
     winLight.position.set(0, 1.5, 2.5);
     group.add(winLight);
 
     group.position.set(x, y, z);
-    group.userData.isHouse = true;
     return group;
 }
 
-// ===== POEM ORBS =====
 export function createPoemOrbs(scene, puzzles, getGroundHeight) {
     const orbs = [];
     const colors = [0xc9a0ff, 0xffb3d9, 0xa0d8ff, 0xffe0a0, 0xb0ffd0, 0xff9aa0, 0xa0ffb0];
@@ -576,8 +538,125 @@ export function createCharacter(scene, type = 'male') {
     };
 
     scene.add(group);
-
     return group;
+}
+
+// ===== CAT (PUSA) =====
+export function createCat(parent, isHeld = true) {
+    const cat = new THREE.Group();
+
+    const furColor = 0xffa060;
+    const stripeColor = 0x8a4a20;
+    const eyeColor = 0x40ff80;
+
+    // Body
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(0.4, 0.35, 0.55),
+        new THREE.MeshStandardMaterial({ color: furColor, roughness: 0.9, flatShading: true })
+    );
+    body.castShadow = true;
+    cat.add(body);
+
+    // Head
+    const head = new THREE.Mesh(
+        new THREE.BoxGeometry(0.35, 0.32, 0.32),
+        new THREE.MeshStandardMaterial({ color: furColor, roughness: 0.9, flatShading: true })
+    );
+    head.position.set(0, 0.18, 0.32);
+    cat.add(head);
+
+    // Ears
+    const earGeo = new THREE.ConeGeometry(0.09, 0.15, 4);
+    const earMat = new THREE.MeshStandardMaterial({ color: furColor, roughness: 0.9, flatShading: true });
+    const earL = new THREE.Mesh(earGeo, earMat);
+    earL.position.set(-0.11, 0.39, 0.3);
+    cat.add(earL);
+    const earR = new THREE.Mesh(earGeo, earMat);
+    earR.position.set(0.11, 0.39, 0.3);
+    cat.add(earR);
+
+    // Inner ears
+    const innerEarGeo = new THREE.ConeGeometry(0.05, 0.08, 4);
+    const innerEarMat = new THREE.MeshBasicMaterial({ color: 0xff90b0 });
+    const innerEarL = new THREE.Mesh(innerEarGeo, innerEarMat);
+    innerEarL.position.set(-0.11, 0.4, 0.32);
+    cat.add(innerEarL);
+    const innerEarR = new THREE.Mesh(innerEarGeo, innerEarMat);
+    innerEarR.position.set(0.11, 0.4, 0.32);
+    cat.add(innerEarR);
+
+    // Eyes
+    const catEyeGeo = new THREE.SphereGeometry(0.045, 8, 8);
+    const catEyeMat = new THREE.MeshBasicMaterial({ color: eyeColor });
+    const catEyeL = new THREE.Mesh(catEyeGeo, catEyeMat);
+    catEyeL.position.set(-0.09, 0.2, 0.48);
+    cat.add(catEyeL);
+    const catEyeR = new THREE.Mesh(catEyeGeo, catEyeMat);
+    catEyeR.position.set(0.09, 0.2, 0.48);
+    cat.add(catEyeR);
+
+    // Pupils
+    const catPupilGeo = new THREE.SphereGeometry(0.025, 6, 6);
+    const catPupilMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    const catPupilL = new THREE.Mesh(catPupilGeo, catPupilMat);
+    catPupilL.position.set(-0.09, 0.2, 0.5);
+    cat.add(catPupilL);
+    const catPupilR = new THREE.Mesh(catPupilGeo, catPupilMat);
+    catPupilR.position.set(0.09, 0.2, 0.5);
+    cat.add(catPupilR);
+
+    // Nose
+    const catNose = new THREE.Mesh(
+        new THREE.ConeGeometry(0.03, 0.04, 4),
+        new THREE.MeshBasicMaterial({ color: 0xff6090 })
+    );
+    catNose.position.set(0, 0.15, 0.49);
+    catNose.rotation.x = Math.PI / 2;
+    cat.add(catNose);
+
+    // Legs (4 small ones)
+    const legMat = new THREE.MeshStandardMaterial({ color: furColor, roughness: 0.9, flatShading: true });
+    const catLegGeo = new THREE.BoxGeometry(0.1, 0.15, 0.1);
+    const catLegFL = new THREE.Mesh(catLegGeo, legMat);
+    catLegFL.position.set(-0.15, -0.22, 0.2);
+    cat.add(catLegFL);
+    const catLegFR = new THREE.Mesh(catLegGeo, legMat);
+    catLegFR.position.set(0.15, -0.22, 0.2);
+    cat.add(catLegFR);
+    const catLegBL = new THREE.Mesh(catLegGeo, legMat);
+    catLegBL.position.set(-0.15, -0.22, -0.2);
+    cat.add(catLegBL);
+    const catLegBR = new THREE.Mesh(catLegGeo, legMat);
+    catLegBR.position.set(0.15, -0.22, -0.2);
+    cat.add(catLegBR);
+
+    // Tail
+    const tail = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.05, 0.05, 0.5, 6),
+        new THREE.MeshStandardMaterial({ color: furColor, roughness: 0.9, flatShading: true })
+    );
+    tail.position.set(0, 0.15, -0.35);
+    tail.rotation.x = Math.PI / 4;
+    cat.add(tail);
+
+    // Stripes on body
+    const stripeMat = new THREE.MeshBasicMaterial({ color: stripeColor });
+    for (let i = 0; i < 3; i++) {
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.05, 0.05), stripeMat);
+        stripe.position.set(0, 0.05 + i * 0.12, 0);
+        cat.add(stripe);
+    }
+
+    cat.userData.isCat = true;
+    cat.userData.tail = tail;
+
+    if (parent) {
+        cat.position.set(-0.5, 1.2, 0.35);  // Held in arm
+        cat.scale.setScalar(0.9);
+        parent.add(cat);
+    }
+
+    return cat;
 }
 
 export function createFlower() {
@@ -630,7 +709,6 @@ export function createButterflies(count = 30) {
         const wingL = new THREE.Mesh(new THREE.CircleGeometry(0.15, 8), wingMat);
         wingL.position.x = -0.1;
         bf.add(wingL);
-
         const wingR = new THREE.Mesh(new THREE.CircleGeometry(0.15, 8), wingMat);
         wingR.position.x = 0.1;
         bf.add(wingR);
