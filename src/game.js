@@ -63,15 +63,13 @@ export class Game {
         this.player = null;
         this.partner = null;
         this.partnerCat = null;
-        this.keys = {};
 
         this.cameraMode = 'third';
         this.cameraAngle = { yaw: 0, pitch: 0.25 };
         this.firstPersonPitch = 0;
         this.cameraDistance = 6;
-        this.cameraSensitivity = 0.015; // Adjusted for slider (15 / 1000)
+        this.cameraSensitivity = 0.015;
 
-        this.isRunning = false;
         this.nearOrb = null;
         this.puzzleActive = false;
         this.ended = false;
@@ -84,9 +82,6 @@ export class Game {
         this.walkCycle = 0;
         this.currentLives = 3;
         this.wrongAnswers = 0;
-
-        // Joystick input
-        this.joystickInput = { x: 0, y: 0 };
 
         this.moveTarget = null;
         this.moveMarker = null;
@@ -113,7 +108,6 @@ export class Game {
         this.sensitivityValue = document.getElementById('sensitivity-value');
 
         this.bindEvents();
-        this.setupJoystick();
         this.animate();
     }
 
@@ -143,72 +137,6 @@ export class Game {
         if (this.livesEl) this.livesEl.textContent = full + empty;
     }
 
-    // ===== JOYSTICK SETUP =====
-    setupJoystick() {
-        const base = document.getElementById('joystick-base');
-        const knob = document.getElementById('joystick-knob');
-        if (!base || !knob) return;
-
-        let active = false;
-        let baseRect = null;
-        const maxDist = 35; // Max distance knob can move from center
-
-        const startHandler = (e) => {
-            e.preventDefault();
-            active = true;
-            baseRect = base.getBoundingClientRect();
-        };
-
-        const moveHandler = (e) => {
-            if (!active || !baseRect) return;
-            e.preventDefault();
-
-            let clientX, clientY;
-            if (e.touches) {
-                clientX = e.touches[0].clientX;
-                clientY = e.touches[0].clientY;
-            } else {
-                clientX = e.clientX;
-                clientY = e.clientY;
-            }
-
-            const centerX = baseRect.left + baseRect.width / 2;
-            const centerY = baseRect.top + baseRect.height / 2;
-
-            let dx = clientX - centerX;
-            let dy = clientY - centerY;
-
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist > maxDist) {
-                dx = (dx / dist) * maxDist;
-                dy = (dy / dist) * maxDist;
-            }
-
-            knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-
-            // Normalize input (-1 to 1)
-            this.joystickInput.x = dx / maxDist;
-            this.joystickInput.y = dy / maxDist;
-        };
-
-        const endHandler = (e) => {
-            e.preventDefault();
-            active = false;
-            knob.style.transform = 'translate(-50%, -50%)';
-            this.joystickInput.x = 0;
-            this.joystickInput.y = 0;
-        };
-
-        base.addEventListener('touchstart', startHandler, { passive: false });
-        document.addEventListener('touchmove', moveHandler, { passive: false });
-        document.addEventListener('touchend', endHandler);
-        document.addEventListener('touchcancel', endHandler);
-
-        base.addEventListener('mousedown', startHandler);
-        document.addEventListener('mousemove', moveHandler);
-        document.addEventListener('mouseup', endHandler);
-    }
-
     bindEvents() {
         window.addEventListener('resize', () => {
             this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -216,54 +144,22 @@ export class Game {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // ===== ARROW KEYS + WASD (both supported) =====
         window.addEventListener('keydown', (e) => {
-            const k = e.key.toLowerCase();
-            this.keys[k] = true;
-            if (e.key === 'Shift') this.isRunning = true;
-            if (e.key === ' ' && this.player && !this.puzzleActive && !this.ended) {
-                this.jump();
-                e.preventDefault();
-            }
-            if (k === 'e' && this.nearOrb && !this.puzzleActive && !this.ended) {
+            if (e.key.toLowerCase() === 'e' && this.nearOrb && !this.puzzleActive && !this.ended) {
                 this.openPuzzle(this.nearOrb);
             }
         });
 
-        window.addEventListener('keyup', (e) => {
-            this.keys[e.key.toLowerCase()] = false;
-            if (e.key === 'Shift') this.isRunning = false;
-        });
-
+        // ===== CLICK-TO-MOVE =====
         this.canvas.addEventListener('click', (e) => {
             if (this.puzzleActive || this.ended) return;
             if (this.nearOrb) {
                 this.openPuzzle(this.nearOrb);
                 return;
             }
-            if (!document.pointerLockElement) {
-                this.canvas.requestPointerLock();
-            }
+            this.setMoveTarget(e.clientX, e.clientY);
         });
 
-        // Mouse camera rotation
-        document.addEventListener('mousemove', (e) => {
-            if (document.pointerLockElement === this.canvas) {
-                const sens = this.cameraSensitivity;
-                if (this.cameraMode === 'first') {
-                    this.cameraAngle.yaw -= e.movementX * sens;
-                    this.firstPersonPitch -= e.movementY * sens;
-                    this.firstPersonPitch = Math.max(-1.2, Math.min(1.2, this.firstPersonPitch));
-                } else {
-                    this.cameraAngle.yaw -= e.movementX * sens;
-                    this.cameraAngle.pitch -= e.movementY * sens;
-                    this.cameraAngle.pitch = Math.max(-0.3, Math.min(0.9, this.cameraAngle.pitch));
-                }
-            }
-        });
-
-        // Mobile: swipe to rotate camera (on canvas)
-        let touchStart = null;
         this.canvas.addEventListener('touchstart', (e) => {
             if (this.puzzleActive || this.ended) return;
             const touch = e.touches[0];
@@ -271,31 +167,73 @@ export class Game {
                 this.openPuzzle(this.nearOrb);
                 return;
             }
-            touchStart = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+            this.setMoveTarget(touch.clientX, touch.clientY);
+        }, { passive: true });
+
+        // ===== MOUSE CAMERA ROTATION (right-click drag) =====
+        let dragging = false;
+        let dragStart = null;
+
+        this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        this.canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 2) {
+                dragging = true;
+                dragStart = { x: e.clientX, y: e.clientY };
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (dragging) {
+                const dx = e.clientX - dragStart.x;
+                const dy = e.clientY - dragStart.y;
+                this.cameraAngle.yaw -= dx * this.cameraSensitivity;
+                this.cameraAngle.pitch -= dy * this.cameraSensitivity;
+                this.cameraAngle.pitch = Math.max(-0.3, Math.min(0.9, this.cameraAngle.pitch));
+                dragStart = { x: e.clientX, y: e.clientY };
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            dragging = false;
+        });
+
+        // ===== TOUCH CAMERA ROTATION (2 fingers) =====
+        let touchStart = null;
+        this.canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                touchStart = {
+                    x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+                    y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+                };
+            }
         }, { passive: true });
 
         this.canvas.addEventListener('touchmove', (e) => {
-            if (!touchStart || this.puzzleActive) return;
-            const touch = e.touches[0];
-            const dx = touch.clientX - touchStart.x;
-            const dy = touch.clientY - touchStart.y;
-            this.cameraAngle.yaw -= dx * this.cameraSensitivity * 0.5;
-            this.cameraAngle.pitch -= dy * this.cameraSensitivity * 0.5;
-            this.cameraAngle.pitch = Math.max(-0.3, Math.min(0.9, this.cameraAngle.pitch));
-            touchStart = { x: touch.clientX, y: touch.clientY };
+            if (e.touches.length === 2 && touchStart) {
+                const x = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                const y = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                const dx = x - touchStart.x;
+                const dy = y - touchStart.y;
+                this.cameraAngle.yaw -= dx * this.cameraSensitivity * 0.8;
+                this.cameraAngle.pitch -= dy * this.cameraSensitivity * 0.8;
+                this.cameraAngle.pitch = Math.max(-0.3, Math.min(0.9, this.cameraAngle.pitch));
+                touchStart = { x, y };
+            }
         }, { passive: true });
 
         this.canvas.addEventListener('touchend', () => {
             touchStart = null;
         });
 
-        // Jump button (mobile)
+        // ===== JUMP =====
         const jumpBtn = document.getElementById('jump-btn');
         if (jumpBtn) {
             jumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); this.jump(); });
             jumpBtn.addEventListener('click', () => this.jump());
         }
 
+        // ===== CAMERA MENU =====
         this.cameraToggle.addEventListener('click', (e) => {
             e.stopPropagation();
             this.cameraMenu.classList.toggle('show');
@@ -314,7 +252,7 @@ export class Game {
             }
         });
 
-        // Sensitivity slider
+        // ===== CAMERA SENSITIVITY =====
         if (this.sensitivitySlider) {
             const saved = localStorage.getItem('cameraSensitivity');
             if (saved) {
@@ -347,6 +285,75 @@ export class Game {
         document.getElementById('restart-btn').addEventListener('click', () => {
             location.reload();
         });
+
+        // ===== MUSIC MENU =====
+        const musicToggle = document.getElementById('music-toggle');
+        const musicMenu = document.getElementById('music-menu');
+        const musicOptions = document.querySelectorAll('.music-option');
+        const volumeSlider = document.getElementById('volume-slider');
+        const volumeValue = document.getElementById('volume-value');
+
+        if (musicToggle && musicMenu) {
+            musicToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                musicMenu.classList.toggle('show');
+            });
+
+            musicOptions.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const songId = parseInt(btn.dataset.song);
+                    audio.playSong(songId);
+
+                    musicOptions.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    if (songId === 0) {
+                        musicToggle.classList.remove('playing');
+                    } else {
+                        musicToggle.classList.add('playing');
+                    }
+
+                    musicMenu.classList.remove('show');
+                });
+            });
+
+            // Load saved music state
+            const savedSong = localStorage.getItem('currentSong');
+            if (savedSong !== null) {
+                const songId = parseInt(savedSong);
+                musicOptions.forEach(b => {
+                    b.classList.toggle('active', parseInt(b.dataset.song) === songId);
+                });
+                if (songId !== 0) {
+                    musicToggle.classList.add('playing');
+                }
+            } else {
+                musicToggle.classList.add('playing');
+            }
+
+            // Volume slider
+            if (volumeSlider && volumeValue) {
+                const savedVol = localStorage.getItem('musicVolume');
+                if (savedVol) {
+                    volumeSlider.value = parseFloat(savedVol) * 100;
+                    volumeValue.textContent = Math.round(parseFloat(savedVol) * 100);
+                }
+
+                volumeSlider.addEventListener('input', (e) => {
+                    const vol = parseInt(e.target.value);
+                    volumeValue.textContent = vol;
+                    audio.setVolume(vol);
+                });
+            }
+
+            // Close menu on outside click
+            document.addEventListener('click', (e) => {
+                if (!musicMenu.contains(e.target) && e.target !== musicToggle) {
+                    musicMenu.classList.remove('show');
+                }
+            });
+        }
     }
 
     setCameraMode(mode) {
@@ -357,50 +364,92 @@ export class Game {
         this.updatePlayerVisibility();
     }
 
+    setMoveTarget(clientX, clientY) {
+        if (!this.player || !this.camera) return;
+
+        const rect = this.canvas.getBoundingClientRect();
+        const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
+        const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this.camera);
+
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const point = new THREE.Vector3();
+        if (raycaster.ray.intersectPlane(plane, point)) {
+            this.moveTarget = point;
+            this.showMoveMarker(point);
+        }
+    }
+
+    showMoveMarker(pos) {
+        if (!this.moveMarker) {
+            const geo = new THREE.RingGeometry(0.4, 0.7, 32);
+            const mat = new THREE.MeshBasicMaterial({
+                color: 0xc9a0ff, transparent: true, opacity: 0.9, side: THREE.DoubleSide
+            });
+            this.moveMarker = new THREE.Mesh(geo, mat);
+            this.moveMarker.rotation.x = -Math.PI / 2;
+            this.scene.add(this.moveMarker);
+        }
+        this.moveMarker.position.set(pos.x, this.getGroundHeight(pos.x, pos.z) + 0.1, pos.z);
+        this.moveMarker.visible = true;
+
+        let scale = 1;
+        const pulse = () => {
+            scale -= 0.04;
+            if (scale < 0.5) {
+                this.moveMarker.scale.setScalar(1);
+                return;
+            }
+            this.moveMarker.scale.setScalar(scale);
+            requestAnimationFrame(pulse);
+        };
+        pulse();
+
+        clearTimeout(this._markerTimeout);
+        this._markerTimeout = setTimeout(() => {
+            if (this.moveMarker) this.moveMarker.visible = false;
+        }, 2000);
+    }
+
     jump() {
         if (!this.player || this.isJumping) return;
         this.velocityY = 8;
         this.isJumping = true;
     }
 
-    // ===== MOVEMENT (ARROW KEYS + WASD + JOYSTICK) =====
     updatePlayer(dt) {
         if (!this.player || this.puzzleActive || this.ended) return;
 
-        const speed = this.isRunning ? 12 : 6;
-
-        // Base directions (world-relative)
-        const forward = new THREE.Vector3(0, 0, -1);
-        const backward = new THREE.Vector3(0, 0, 1);
-        const left = new THREE.Vector3(-1, 0, 0);
-        const right = new THREE.Vector3(1, 0, 0);
-
+        const speed = 6;
         let move = new THREE.Vector3();
+        let isMoving = false;
 
-        // Arrow keys + WASD
-        if (this.keys['arrowup'] || this.keys['w']) move.add(forward);
-        if (this.keys['arrowdown'] || this.keys['s']) move.add(backward);
-        if (this.keys['arrowleft'] || this.keys['a']) move.add(left);
-        if (this.keys['arrowright'] || this.keys['d']) move.add(right);
+        if (this.moveTarget) {
+            const dir = new THREE.Vector3(
+                this.moveTarget.x - this.player.position.x, 0,
+                this.moveTarget.z - this.player.position.z
+            );
+            const dist = dir.length();
 
-        // Joystick input
-        if (Math.abs(this.joystickInput.x) > 0.15 || Math.abs(this.joystickInput.y) > 0.15) {
-            move.x += this.joystickInput.x;
-            move.z += this.joystickInput.y;
+            if (dist > 0.4) {
+                move = dir.normalize();
+                isMoving = true;
+            } else {
+                this.moveTarget = null;
+            }
         }
 
-        const isMoving = move.length() > 0;
-
         if (isMoving) {
-            move.normalize();
             const next = this.player.position.clone().addScaledVector(move, speed * dt);
 
             let blocked = false;
             for (const c of this.collidables) {
                 const dx = next.x - c.x;
                 const dz = next.z - c.z;
-                const dist = Math.sqrt(dx * dx + dz * dz);
-                if (dist < c.radius + 0.4) { blocked = true; break; }
+                const d = Math.sqrt(dx * dx + dz * dz);
+                if (d < c.radius + 0.4) { blocked = true; break; }
             }
 
             if (!blocked) {
@@ -409,6 +458,8 @@ export class Game {
                     this.player.position.x = next.x;
                     this.player.position.z = next.z;
                 }
+            } else {
+                this.moveTarget = null;
             }
 
             const targetRot = Math.atan2(move.x, move.z);
@@ -432,7 +483,7 @@ export class Game {
 
         const u = this.player.userData;
         if (isMoving && !this.isJumping) {
-            this.walkCycle += dt * (this.isRunning ? 14 : 9);
+            this.walkCycle += dt * 9;
             const swing = Math.sin(this.walkCycle);
             const counterSwing = Math.sin(this.walkCycle + Math.PI);
 
@@ -530,7 +581,6 @@ export class Game {
         if (orb.userData.collected) return;
         this.puzzleActive = true;
         this.currentOrb = orb;
-        document.exitPointerLock?.();
 
         this.currentLives = 3;
         this.wrongAnswers = 0;
@@ -643,7 +693,6 @@ export class Game {
         this.updateLivesDisplay();
     }
 
-    // ===== CINEMATIC ENDING =====
     startEnding() {
         this.ended = true;
         this.endingMode = true;
@@ -873,6 +922,11 @@ export class Game {
         <br/>
         <p class="poem-line signature">— ${playerName}, 2026</p>
       `;
+
+            finalPoem.style.animation = 'none';
+            void finalPoem.offsetWidth;
+            finalPoem.style.animation = 'autoScroll 60s linear forwards';
+            finalPoem.style.animationDelay = '2s';
         }
     }
 

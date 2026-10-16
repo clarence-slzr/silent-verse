@@ -62,7 +62,131 @@ body {
     letter-spacing: 4px;
 }
 
-/* Camera toggle */
+/* ===== MUSIC BUTTON ===== */
+.music-icon {
+    position: fixed;
+    top: 60px;
+    right: 78px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(30, 20, 50, 0.85);
+    border: 1px solid rgba(200, 170, 255, 0.5);
+    color: #e8d8ff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    pointer-events: all;
+    padding: 0;
+}
+
+.music-icon:hover {
+    background: rgba(90, 60, 150, 0.95);
+    border-color: #c9a0ff;
+    transform: scale(1.1);
+}
+
+.music-icon.playing {
+    animation: musicPulse 2s ease-in-out infinite;
+}
+
+@keyframes musicPulse {
+
+    0%,
+    100% {
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    }
+
+    50% {
+        box-shadow: 0 4px 30px rgba(201, 160, 255, 0.9), 0 0 20px rgba(201, 160, 255, 0.7);
+    }
+}
+
+.music-menu {
+    position: fixed;
+    top: 110px;
+    right: 78px;
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 100;
+    animation: menuFadeIn 0.25s ease;
+    min-width: 260px;
+    max-width: 320px;
+}
+
+.music-menu.show {
+    display: flex;
+}
+
+.music-title {
+    padding: 8px 14px;
+    font-size: 12px;
+    color: #c9a0ff;
+    letter-spacing: 2px;
+    text-align: center;
+    text-transform: uppercase;
+    opacity: 0.8;
+}
+
+.music-option {
+    padding: 12px 16px;
+    background: rgba(30, 20, 50, 0.95);
+    border: 1px solid rgba(200, 170, 255, 0.4);
+    border-radius: 10px;
+    color: #e8d8ff;
+    font-family: inherit;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: all;
+}
+
+.music-option:hover {
+    background: rgba(90, 60, 150, 0.95);
+    border-color: #c9a0ff;
+    transform: translateX(-4px);
+}
+
+.music-option.active {
+    background: rgba(140, 90, 220, 0.9);
+    border-color: #c9a0ff;
+    box-shadow: 0 0 20px rgba(180, 120, 255, 0.6);
+}
+
+.music-controls {
+    padding: 10px 14px;
+    background: rgba(30, 20, 50, 0.95);
+    border: 1px solid rgba(200, 170, 255, 0.4);
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.music-controls label {
+    display: block;
+    font-size: 11px;
+    color: #e8d8ff;
+    margin-bottom: 6px;
+    letter-spacing: 1px;
+}
+
+.music-controls input[type="range"] {
+    width: 100%;
+    accent-color: #c9a0ff;
+    cursor: pointer;
+}
+
+/* ===== CAMERA BUTTON ===== */
 .camera-icon {
     position: fixed;
     top: 60px;
@@ -70,21 +194,22 @@ body {
     width: 44px;
     height: 44px;
     border-radius: 50%;
-    background: rgba(30, 20, 50, 0.75);
-    border: 1px solid rgba(200, 170, 255, 0.4);
+    background: rgba(30, 20, 50, 0.85);
+    border: 1px solid rgba(200, 170, 255, 0.5);
     color: #e8d8ff;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 8;
+    z-index: 100;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
     pointer-events: all;
+    padding: 0;
 }
 
 .camera-icon:hover {
-    background: rgba(90, 60, 150, 0.85);
+    background: rgba(90, 60, 150, 0.95);
     border-color: #c9a0ff;
     transform: scale(1.1);
 }
@@ -96,7 +221,7 @@ body {
     display: none;
     flex-direction: column;
     gap: 8px;
-    z-index: 8;
+    z-index: 100;
     animation: menuFadeIn 0.25s ease;
 }
 
@@ -118,7 +243,7 @@ body {
 
 .camera-option {
     padding: 12px 18px;
-    background: rgba(30, 20, 50, 0.92);
+    background: rgba(30, 20, 50, 0.95);
     border: 1px solid rgba(200, 170, 255, 0.4);
     border-radius: 10px;
     color: #e8d8ff;
@@ -130,23 +255,23 @@ body {
     transition: all 0.2s ease;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
     min-width: 200px;
+    pointer-events: all;
 }
 
 .camera-option:hover {
-    background: rgba(90, 60, 150, 0.9);
+    background: rgba(90, 60, 150, 0.95);
     border-color: #c9a0ff;
-    transform: translateX(-4px);
 }
 
 .camera-option.active {
-    background: rgba(140, 90, 220, 0.85);
+    background: rgba(140, 90, 220, 0.9);
     border-color: #c9a0ff;
     box-shadow: 0 0 20px rgba(180, 120, 255, 0.6);
 }
 
 .sensitivity-control {
     padding: 12px 18px;
-    background: rgba(30, 20, 50, 0.92);
+    background: rgba(30, 20, 50, 0.95);
     border: 1px solid rgba(200, 170, 255, 0.4);
     border-radius: 10px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
@@ -289,7 +414,7 @@ body {
     align-items: center;
     justify-content: center;
     background: radial-gradient(ellipse at center, rgba(20, 15, 40, 0.85), rgba(5, 3, 15, 0.97));
-    z-index: 10;
+    z-index: 50;
     backdrop-filter: blur(6px);
     padding: 20px;
 }
@@ -536,7 +661,7 @@ body {
     color: #ff9090;
 }
 
-/* ===== ENDING SCREEN — AUTO SCROLL ===== */
+/* ENDING */
 #ending-screen {
     background: linear-gradient(to bottom, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.9));
     align-items: stretch;
@@ -669,6 +794,24 @@ body {
     #interact-prompt {
         bottom: 200px;
         font-size: 12px;
+    }
+
+    .music-icon {
+        top: 56px;
+        right: 60px;
+        width: 40px;
+        height: 40px;
+    }
+
+    .music-menu {
+        top: 104px;
+        right: 60px;
+        min-width: 200px;
+    }
+
+    .music-option {
+        font-size: 12px;
+        padding: 10px 12px;
     }
 
     .camera-icon {

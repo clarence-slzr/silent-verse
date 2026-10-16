@@ -1,27 +1,77 @@
 class AudioManager {
     constructor() {
         this.ctx = null;
-        this.bg = null;
         this.enabled = false;
+        this.bgAudio = null;
+        this.currentSong = 1;
+        this.volume = 0.35;
+
+        this.songs = {
+            0: null,
+            1: '/song1.mp3',
+            2: '/song2.mp3',
+            3: '/song3.mp3'
+        };
     }
 
     init() {
         if (this.ctx) return;
         try {
             this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-        } catch (e) {
-            console.warn('AudioContext not available', e);
-        }
+        } catch (e) { }
     }
 
     startBg() {
+        const saved = localStorage.getItem('currentSong');
+        if (saved !== null) this.currentSong = parseInt(saved);
+        const savedVol = localStorage.getItem('musicVolume');
+        if (savedVol) this.volume = parseFloat(savedVol);
+        this.playSong(this.currentSong);
+    }
+
+    playSong(songId) {
+        if (this.bgAudio) {
+            this.bgAudio.pause();
+            this.bgAudio.currentTime = 0;
+            this.bgAudio = null;
+        }
+
+        this.currentSong = songId;
+        localStorage.setItem('currentSong', songId);
+
+        if (songId === 0) {
+            this.startProceduralBg();
+            return;
+        }
+
+        const url = this.songs[songId];
+        if (!url) return;
+
+        this.bgAudio = new Audio(url);
+        this.bgAudio.loop = true;
+        this.bgAudio.volume = this.volume;
+
+        this.bgAudio.play().catch((err) => {
+            console.log('MP3 play failed:', err);
+            this.startProceduralBg();
+        });
+    }
+
+    setVolume(vol) {
+        this.volume = vol / 100;
+        localStorage.setItem('musicVolume', this.volume);
+        if (this.bgAudio) this.bgAudio.volume = this.volume;
+        if (this.masterGain) this.masterGain.gain.value = this.volume * 0.2;
+    }
+
+    startProceduralBg() {
         this.init();
         if (!this.ctx || this.enabled) return;
         this.enabled = true;
         if (this.ctx.state === 'suspended') this.ctx.resume();
 
         const masterGain = this.ctx.createGain();
-        masterGain.gain.value = 0.08;
+        masterGain.gain.value = this.volume * 0.2;
         masterGain.connect(this.ctx.destination);
         this.masterGain = masterGain;
 
@@ -59,9 +109,8 @@ class AudioManager {
     stopBg() {
         this.enabled = false;
         if (this.bgInterval) clearInterval(this.bgInterval);
-        if (this.masterGain) {
-            try { this.masterGain.disconnect(); } catch (e) { }
-        }
+        if (this.masterGain) { try { this.masterGain.disconnect(); } catch (e) { } }
+        if (this.bgAudio) this.bgAudio.pause();
     }
 
     pickup() {
@@ -132,5 +181,4 @@ class AudioManager {
     }
 }
 
-// ⚠️ ITO YUNG IMPORTANTE — ITO YUNG KULANG KANINA
 export const audio = new AudioManager();
