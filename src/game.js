@@ -11,7 +11,6 @@ import {
     createBirds
 } from './world.js';
 
-// Floating notes that pop up as you walk
 const WALKING_NOTES = [
     'The valley remembers every step...',
     'A poem waits nearby.',
@@ -44,7 +43,7 @@ export class Game {
         this.scene.background = new THREE.Color(0x2a1a4a);
 
         this.camera = new THREE.PerspectiveCamera(
-            65,
+            70,
             window.innerWidth / window.innerHeight,
             0.1,
             500
@@ -82,8 +81,13 @@ export class Game {
         this.player = null;
         this.partner = null;
         this.keys = {};
-        this.cameraAngle = { yaw: 0, pitch: -0.25 };
-        this.cameraDistance = 7;
+
+        // ===== CAMERA MODE =====
+        this.cameraMode = 'third';                    // 'first' or 'third'
+        this.cameraAngle = { yaw: 0, pitch: 0.25 };   // pitch for third-person
+        this.firstPersonPitch = 0;                    // separate pitch for first-person
+        this.cameraDistance = 6;                      // distance in third-person
+
         this.isRunning = false;
         this.nearOrb = null;
         this.puzzleActive = false;
@@ -114,6 +118,11 @@ export class Game {
         this.interactPrompt = document.getElementById('interact-prompt');
         this.interactText = document.getElementById('interact-text');
 
+        // Camera UI
+        this.cameraToggle = document.getElementById('camera-toggle');
+        this.cameraMenu = document.getElementById('camera-menu');
+        this.cameraOptions = document.querySelectorAll('.camera-option');
+
         this.bindEvents();
         this.animate();
     }
@@ -123,7 +132,14 @@ export class Game {
         this.player = createCharacter(this.scene, gender);
         this.player.position.set(0, this.getGroundHeight(0, 0), 0);
         this.groundY = this.player.position.y;
+        this.updatePlayerVisibility();
         audio.startBg();
+    }
+
+    updatePlayerVisibility() {
+        // In first-person, hide the player's own body
+        if (!this.player) return;
+        this.player.visible = (this.cameraMode === 'third');
     }
 
     bindEvents() {
@@ -133,7 +149,6 @@ export class Game {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // Keyboard
         window.addEventListener('keydown', (e) => {
             const k = e.key.toLowerCase();
             this.keys[k] = true;
@@ -152,40 +167,39 @@ export class Game {
             if (e.key === 'Shift') this.isRunning = false;
         });
 
-        // Mouse look via pointer lock (desktop)
         this.canvas.addEventListener('click', (e) => {
             if (this.puzzleActive || this.ended) return;
 
-            // If we have an orb nearby, open puzzle
             if (this.nearOrb) {
                 this.openPuzzle(this.nearOrb);
                 return;
             }
 
-            // On mobile or if not pointer locked, use click-to-move
             const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
             if (isMobile) {
                 this.setMoveTarget(e.clientX, e.clientY);
                 return;
             }
 
-            // Desktop: try pointer lock
             if (!document.pointerLockElement) {
                 this.canvas.requestPointerLock();
-            } else {
-                // If already locked, still allow click-to-move via center raycast? Simpler: ignore.
             }
         });
 
         document.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement === this.canvas) {
-                this.cameraAngle.yaw -= e.movementX * 0.0025;
-                this.cameraAngle.pitch -= e.movementY * 0.0025;
-                this.cameraAngle.pitch = Math.max(-0.9, Math.min(0.3, this.cameraAngle.pitch));
+                if (this.cameraMode === 'first') {
+                    this.cameraAngle.yaw -= e.movementX * 0.0022;
+                    this.firstPersonPitch -= e.movementY * 0.0022;
+                    this.firstPersonPitch = Math.max(-1.2, Math.min(1.2, this.firstPersonPitch));
+                } else {
+                    this.cameraAngle.yaw -= e.movementX * 0.0025;
+                    this.cameraAngle.pitch -= e.movementY * 0.0025;
+                    this.cameraAngle.pitch = Math.max(-0.3, Math.min(0.9, this.cameraAngle.pitch));
+                }
             }
         });
 
-        // Touch controls for mobile
         this.canvas.addEventListener('touchstart', (e) => {
             if (this.puzzleActive || this.ended) return;
             const touch = e.touches[0];
@@ -196,7 +210,7 @@ export class Game {
             this.setMoveTarget(touch.clientX, touch.clientY);
         }, { passive: true });
 
-        // Jump button
+        // Jump
         const jumpBtn = document.getElementById('jump-btn');
         if (jumpBtn) {
             jumpBtn.addEventListener('touchstart', (e) => {
@@ -206,10 +220,32 @@ export class Game {
             jumpBtn.addEventListener('click', () => this.jump());
         }
 
-        // Puzzle close
+        // ===== CAMERA TOGGLE =====
+        this.cameraToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.cameraMenu.classList.toggle('show');
+        });
+
+        this.cameraOptions.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const mode = btn.dataset.mode;
+                this.setCameraMode(mode);
+                this.cameraMenu.classList.remove('show');
+            });
+        });
+
+        // Close camera menu when clicking elsewhere
+        document.addEventListener('click', (e) => {
+            if (!this.cameraMenu.contains(e.target) && e.target !== this.cameraToggle) {
+                this.cameraMenu.classList.remove('show');
+            }
+        });
+
+        // Puzzle
         document.getElementById('close-puzzle').addEventListener('click', () => this.closePuzzle());
 
-        // Ending final button
+        // Final poem button
         const finalBtn = document.getElementById('final-poem-btn');
         if (finalBtn) {
             finalBtn.addEventListener('click', () => {
@@ -222,6 +258,24 @@ export class Game {
         });
     }
 
+    setCameraMode(mode) {
+        this.cameraMode = mode;
+
+        // Update button states
+        this.cameraOptions.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
+
+        // Reset pitch when switching
+        if (mode === 'first') {
+            this.firstPersonPitch = 0;
+        } else {
+            this.cameraAngle.pitch = 0.25;
+        }
+
+        this.updatePlayerVisibility();
+    }
+
     setMoveTarget(clientX, clientY) {
         if (!this.player || !this.camera) return;
         const rect = this.canvas.getBoundingClientRect();
@@ -231,7 +285,6 @@ export class Game {
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this.camera);
 
-        // Intersect with ground plane at y = groundY
         const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.groundY);
         const point = new THREE.Vector3();
         if (raycaster.ray.intersectPlane(plane, point)) {
@@ -256,7 +309,6 @@ export class Game {
         this.moveMarker.position.set(pos.x, this.getGroundHeight(pos.x, pos.z) + 0.05, pos.z);
         this.moveMarker.visible = true;
 
-        // Fade out
         clearTimeout(this._markerTimeout);
         this._markerTimeout = setTimeout(() => {
             if (this.moveMarker) this.moveMarker.visible = false;
@@ -286,13 +338,11 @@ export class Game {
 
         let move = new THREE.Vector3();
 
-        // Keyboard input
         if (this.keys['w'] || this.keys['arrowup']) move.add(forward);
         if (this.keys['s'] || this.keys['arrowdown']) move.sub(forward);
         if (this.keys['a'] || this.keys['arrowleft']) move.sub(right);
         if (this.keys['d'] || this.keys['arrowright']) move.add(right);
 
-        // Click-to-move
         if (move.length() === 0 && this.moveTarget) {
             const dir = new THREE.Vector3(
                 this.moveTarget.x - this.player.position.x,
@@ -310,7 +360,6 @@ export class Game {
             move.normalize();
             const next = this.player.position.clone().addScaledVector(move, speed * dt);
 
-            // Collision check
             let blocked = false;
             for (const c of this.collidables) {
                 const dx = next.x - c.x;
@@ -328,10 +377,12 @@ export class Game {
                 if (next.length() < maxR) {
                     this.player.position.x = next.x;
                     this.player.position.z = next.z;
-                    const targetRot = Math.atan2(move.x, move.z);
-                    this.player.rotation.y = this.lerpAngle(this.player.rotation.y, targetRot, 0.15);
                 }
             }
+
+            // Rotate player to face movement (only matters in third-person)
+            const targetRot = Math.atan2(move.x, move.z);
+            this.player.rotation.y = this.lerpAngle(this.player.rotation.y, targetRot, 0.2);
         }
 
         // Vertical physics (jump)
@@ -350,14 +401,17 @@ export class Game {
             this.player.position.y = groundY;
         }
 
-        // Walking animation
+        // Walk animation
         const t = performance.now() * 0.005;
-        if (move.length() > 0) {
-            this.player.userData.leftArm.rotation.x = Math.sin(t) * 0.4;
-            this.player.userData.rightArm.rotation.x = -Math.sin(t) * 0.4;
-        } else {
-            this.player.userData.leftArm.rotation.x *= 0.9;
-            this.player.userData.rightArm.rotation.x *= 0.9;
+        const moving = move.length() > 0;
+        if (this.player.userData.leftArm) {
+            if (moving) {
+                this.player.userData.leftArm.rotation.x = Math.sin(t) * 0.5;
+                this.player.userData.rightArm.rotation.x = -Math.sin(t) * 0.5;
+            } else {
+                this.player.userData.leftArm.rotation.x *= 0.9;
+                this.player.userData.rightArm.rotation.x *= 0.9;
+            }
         }
     }
 
@@ -371,14 +425,47 @@ export class Game {
     updateCamera(dt) {
         if (!this.player || this.endingMode) return;
 
-        const targetY = this.player.position.y + 1.6;
-        const dist = this.cameraDistance;
-        const camX = this.player.position.x + Math.sin(this.cameraAngle.yaw) * dist * Math.cos(this.cameraAngle.pitch);
-        const camZ = this.player.position.z + Math.cos(this.cameraAngle.yaw) * dist * Math.cos(this.cameraAngle.pitch);
-        const camY = targetY + 2 + Math.sin(this.cameraAngle.pitch) * dist;
+        if (this.cameraMode === 'first') {
+            // ===== FIRST PERSON =====
+            const eyeHeight = this.player.position.y + 1.65;
+            this.camera.position.lerp(
+                new THREE.Vector3(
+                    this.player.position.x,
+                    eyeHeight,
+                    this.player.position.z
+                ),
+                1 - Math.pow(0.0001, dt)
+            );
 
-        this.camera.position.lerp(new THREE.Vector3(camX, camY, camZ), 1 - Math.pow(0.001, dt));
-        this.camera.lookAt(this.player.position.x, targetY, this.player.position.z);
+            const dir = new THREE.Vector3(
+                -Math.sin(this.cameraAngle.yaw) * Math.cos(this.firstPersonPitch),
+                Math.sin(this.firstPersonPitch),
+                -Math.cos(this.cameraAngle.yaw) * Math.cos(this.firstPersonPitch)
+            );
+            this.camera.lookAt(
+                this.camera.position.x + dir.x,
+                this.camera.position.y + dir.y,
+                this.camera.position.z + dir.z
+            );
+        } else {
+            // ===== THIRD PERSON =====
+            const targetY = this.player.position.y + 1.2;
+            const dist = this.cameraDistance;
+
+            const camX = this.player.position.x + Math.sin(this.cameraAngle.yaw) * dist;
+            const camZ = this.player.position.z + Math.cos(this.cameraAngle.yaw) * dist;
+            const camY = targetY + 2.5 + this.cameraAngle.pitch * 5;
+
+            this.camera.position.lerp(
+                new THREE.Vector3(camX, camY, camZ),
+                1 - Math.pow(0.001, dt)
+            );
+            this.camera.lookAt(
+                this.player.position.x,
+                targetY,
+                this.player.position.z
+            );
+        }
     }
 
     updateOrbs(dt) {
@@ -436,7 +523,6 @@ export class Game {
         this.puzzleFeedback.textContent = '';
         this.puzzleFeedback.className = 'feedback';
 
-        // Build A/B/C/D buttons
         this.puzzleChoices.innerHTML = '';
         const letters = ['A', 'B', 'C', 'D'];
         p.choices.forEach((choice, i) => {
@@ -503,10 +589,12 @@ export class Game {
         this.ended = true;
         this.endingMode = true;
         this.interactPrompt.classList.remove('show');
+        this.cameraMenu.classList.remove('show');
 
         const endX = 0, endZ = 0;
         this.player.position.set(endX - 0.7, this.getGroundHeight(endX - 0.7, endZ), endZ);
         this.player.rotation.y = 0;
+        this.player.visible = true;
 
         const partnerGender = this.gender === 'male' ? 'female' : 'male';
         this.partner = createCharacter(this.scene, partnerGender);
@@ -616,7 +704,6 @@ export class Game {
                 this.updateCamera(dt);
                 this.updateOrbs(dt);
 
-                // Floating notes timer
                 this.noteTimer += dt;
                 if (this.noteTimer > this.nextNoteTime && !this.ended && !this.puzzleActive) {
                     this.noteTimer = 0;
