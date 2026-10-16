@@ -6,6 +6,7 @@ export function createWorld(scene) {
 
     scene.fog = new THREE.FogExp2(0x2a1a4a, 0.012);
 
+    // Ground
     const groundGeo = new THREE.PlaneGeometry(400, 400, 64, 64);
     const positions = groundGeo.attributes.position;
     for (let i = 0; i < positions.count; i++) {
@@ -16,10 +17,7 @@ export function createWorld(scene) {
     }
     groundGeo.computeVertexNormals();
     const groundMat = new THREE.MeshStandardMaterial({
-        color: 0x3e5a3a,
-        roughness: 0.95,
-        metalness: 0.05,
-        flatShading: true
+        color: 0x3e5a3a, roughness: 0.95, metalness: 0.05, flatShading: true
     });
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
@@ -46,7 +44,21 @@ export function createWorld(scene) {
     }
     world.add(grass);
 
-    // Collision objects
+    // Stars in the sky
+    const starGeo = new THREE.SphereGeometry(0.15, 6, 6);
+    const starMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    for (let i = 0; i < 200; i++) {
+        const star = new THREE.Mesh(starGeo, starMat.clone());
+        star.material.color.setHex([0xffffff, 0xffe0a0, 0xa0d8ff, 0xffb3d9][Math.floor(Math.random() * 4)]);
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 80 + Math.random() * 150;
+        const height = 40 + Math.random() * 60;
+        star.position.set(Math.cos(angle) * radius, height, Math.sin(angle) * radius);
+        star.scale.setScalar(0.5 + Math.random() * 1.5);
+        world.add(star);
+    }
+
+    // Collidables
     const collidables = [];
 
     // Trees
@@ -99,6 +111,24 @@ export function createWorld(scene) {
         world.add(light);
     }
 
+    // ===== DUYAN (Swing on tree) =====
+    const swingPos = { x: 35, z: -25 };
+    const swingY = Math.sin(swingPos.x * 0.05) * Math.cos(swingPos.z * 0.05) * 1.5;
+    world.add(createSwing(swingPos.x, swingY, swingPos.z));
+    collidables.push({ x: swingPos.x, z: swingPos.z, radius: 1.5 });
+
+    // ===== CAMPING AREA (Campfire) =====
+    const campPos = { x: -45, z: 35 };
+    const campY = Math.sin(campPos.x * 0.05) * Math.cos(campPos.z * 0.05) * 1.5;
+    world.add(createCampfire(campPos.x, campY, campPos.z));
+    collidables.push({ x: campPos.x, z: campPos.z, radius: 1.8 });
+
+    // ===== BAHAY (House) =====
+    const housePos = { x: 60, z: 40 };
+    const houseY = Math.sin(housePos.x * 0.05) * Math.cos(housePos.z * 0.05) * 1.5;
+    world.add(createHouse(housePos.x, houseY, housePos.z));
+    collidables.push({ x: housePos.x, z: housePos.z, radius: 3.5 });
+
     return {
         world,
         ground,
@@ -135,6 +165,174 @@ function createTree(x, y, z) {
     return group;
 }
 
+// ===== SWING (Duyan) =====
+function createSwing(x, y, z) {
+    const group = new THREE.Group();
+
+    // Tree trunk
+    const trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.35, 0.55, 5, 6),
+        new THREE.MeshStandardMaterial({ color: 0x4a3428, roughness: 1, flatShading: true })
+    );
+    trunk.position.y = 2.5;
+    trunk.castShadow = true;
+    group.add(trunk);
+
+    // Foliage
+    const foliageMat = new THREE.MeshStandardMaterial({ color: 0x4d7b4d, roughness: 1, flatShading: true });
+    for (let i = 0; i < 3; i++) {
+        const foliage = new THREE.Mesh(
+            new THREE.IcosahedronGeometry(1.8 - i * 0.35, 0),
+            foliageMat
+        );
+        foliage.position.y = 5 + i * 1.2;
+        foliage.rotation.set(Math.random(), Math.random(), Math.random());
+        group.add(foliage);
+    }
+
+    // Branch
+    const branch = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.12, 0.12, 3, 6),
+        new THREE.MeshStandardMaterial({ color: 0x4a3428, roughness: 1 })
+    );
+    branch.position.set(1.8, 5.5, 0);
+    branch.rotation.z = Math.PI / 2.2;
+    group.add(branch);
+
+    // Ropes
+    const ropeMat = new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 1 });
+    const rope1 = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.5, 4), ropeMat);
+    rope1.position.set(2.7, 4.2, 0.3);
+    group.add(rope1);
+    const rope2 = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.5, 4), ropeMat);
+    rope2.position.set(2.7, 4.2, -0.3);
+    group.add(rope2);
+
+    // Seat
+    const seat = new THREE.Mesh(
+        new THREE.BoxGeometry(0.9, 0.1, 0.5),
+        new THREE.MeshStandardMaterial({ color: 0x8a5a3a, roughness: 0.9, flatShading: true })
+    );
+    seat.position.set(2.7, 2.9, 0);
+    seat.castShadow = true;
+    group.add(seat);
+
+    group.position.set(x, y, z);
+    group.userData.isSwing = true;
+    return group;
+}
+
+// ===== CAMPFIRE =====
+function createCampfire(x, y, z) {
+    const group = new THREE.Group();
+
+    // Logs
+    const logMat = new THREE.MeshStandardMaterial({ color: 0x3a2418, roughness: 1, flatShading: true });
+    for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2;
+        const log = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.15, 0.15, 1.2, 6),
+            logMat
+        );
+        log.position.set(Math.cos(angle) * 0.4, 0.3, Math.sin(angle) * 0.4);
+        log.rotation.z = Math.PI / 2.5;
+        log.rotation.y = angle;
+        group.add(log);
+    }
+
+    // Fire
+    const fire1 = new THREE.Mesh(
+        new THREE.ConeGeometry(0.35, 0.8, 6),
+        new THREE.MeshBasicMaterial({ color: 0xff6020, transparent: true, opacity: 0.9 })
+    );
+    fire1.position.y = 0.9;
+    group.add(fire1);
+
+    const fire2 = new THREE.Mesh(
+        new THREE.ConeGeometry(0.25, 0.6, 6),
+        new THREE.MeshBasicMaterial({ color: 0xffcc40, transparent: true, opacity: 0.9 })
+    );
+    fire2.position.y = 1.0;
+    group.add(fire2);
+
+    // Fire light
+    const fireLight = new THREE.PointLight(0xff8040, 3, 15);
+    fireLight.position.y = 1.2;
+    fireLight.userData.isFireLight = true;
+    group.add(fireLight);
+
+    // Stones around
+    const stoneMat = new THREE.MeshStandardMaterial({ color: 0x554466, roughness: 0.9, flatShading: true });
+    for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        const stone = new THREE.Mesh(
+            new THREE.DodecahedronGeometry(0.22, 0),
+            stoneMat
+        );
+        stone.position.set(Math.cos(angle) * 1.1, 0.15, Math.sin(angle) * 1.1);
+        group.add(stone);
+    }
+
+    // Tent (small)
+    const tentBody = new THREE.Mesh(
+        new THREE.ConeGeometry(1.2, 1.6, 4),
+        new THREE.MeshStandardMaterial({ color: 0x5a8a4a, roughness: 1, flatShading: true })
+    );
+    tentBody.position.set(-2.5, 0.8, 1);
+    tentBody.rotation.y = Math.PI / 4;
+    group.add(tentBody);
+
+    group.position.set(x, y, z);
+    group.userData.isCampfire = true;
+    return group;
+}
+
+// ===== HOUSE =====
+function createHouse(x, y, z) {
+    const group = new THREE.Group();
+
+    // Walls
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0xa08070, roughness: 0.9, flatShading: true });
+    const walls = new THREE.Mesh(new THREE.BoxGeometry(4, 2.5, 4), wallMat);
+    walls.position.y = 1.25;
+    walls.castShadow = true;
+    walls.receiveShadow = true;
+    group.add(walls);
+
+    // Roof
+    const roofMat = new THREE.MeshStandardMaterial({ color: 0x8a3a2a, roughness: 0.9, flatShading: true });
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(3.2, 2, 4), roofMat);
+    roof.position.y = 3.5;
+    roof.rotation.y = Math.PI / 4;
+    roof.castShadow = true;
+    group.add(roof);
+
+    // Door
+    const doorMat = new THREE.MeshStandardMaterial({ color: 0x3a2418, roughness: 1 });
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.6, 0.1), doorMat);
+    door.position.set(0, 0.8, 2.05);
+    group.add(door);
+
+    // Windows
+    const windowMat = new THREE.MeshBasicMaterial({ color: 0xffe0a0 });
+    const win1 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.1), windowMat);
+    win1.position.set(-1.4, 1.5, 2.05);
+    group.add(win1);
+    const win2 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.1), windowMat);
+    win2.position.set(1.4, 1.5, 2.05);
+    group.add(win2);
+
+    // Window light
+    const winLight = new THREE.PointLight(0xffe0a0, 2, 8);
+    winLight.position.set(0, 1.5, 2.5);
+    group.add(winLight);
+
+    group.position.set(x, y, z);
+    group.userData.isHouse = true;
+    return group;
+}
+
+// ===== POEM ORBS =====
 export function createPoemOrbs(scene, puzzles, getGroundHeight) {
     const orbs = [];
     const colors = [0xc9a0ff, 0xffb3d9, 0xa0d8ff, 0xffe0a0, 0xb0ffd0, 0xff9aa0, 0xa0ffb0];
@@ -161,10 +359,7 @@ export function createPoemOrbs(scene, puzzles, getGroundHeight) {
         group.add(core);
 
         const shellMat = new THREE.MeshBasicMaterial({
-            color: colors[i % colors.length],
-            transparent: true,
-            opacity: 0.3,
-            wireframe: true
+            color: colors[i % colors.length], transparent: true, opacity: 0.3, wireframe: true
         });
         const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(0.9, 1), shellMat);
         group.add(shell);
@@ -178,9 +373,7 @@ export function createPoemOrbs(scene, puzzles, getGroundHeight) {
             baseY: y + 1.5,
             time: Math.random() * Math.PI * 2,
             collected: false,
-            core,
-            shell,
-            light
+            core, shell, light
         };
 
         scene.add(group);
@@ -190,12 +383,11 @@ export function createPoemOrbs(scene, puzzles, getGroundHeight) {
     return orbs;
 }
 
-// ===== DETAILED CHARACTER (Male & Female) =====
+// ===== CHARACTER =====
 export function createCharacter(scene, type = 'male') {
     const group = new THREE.Group();
     const isMale = type === 'male';
 
-    // Colors
     const skinColor = isMale ? 0xf0c8a0 : 0xf5d0b0;
     const hairColor = isMale ? 0x2a1a10 : 0x3a1810;
     const beardColor = 0x1a0f08;
@@ -203,7 +395,6 @@ export function createCharacter(scene, type = 'male') {
     const shirtColor = isMale ? 0x5a3a2a : 0xf5e0e8;
     const pantsColor = isMale ? 0x3a4a5a : 0x4a3a5a;
 
-    // ===== HEAD =====
     const head = new THREE.Mesh(
         new THREE.BoxGeometry(0.75, 0.85, 0.7),
         new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.8, flatShading: true })
@@ -219,7 +410,6 @@ export function createCharacter(scene, type = 'male') {
     faceFront.position.set(0, 1.65, 0.01);
     group.add(faceFront);
 
-    // ===== HAIR =====
     if (isMale) {
         const hairTop = new THREE.Mesh(
             new THREE.BoxGeometry(0.82, 0.35, 0.78),
@@ -244,7 +434,6 @@ export function createCharacter(scene, type = 'male') {
         spike2.rotation.z = -0.2;
         group.add(spike2);
 
-        // Beard
         const beard = new THREE.Mesh(
             new THREE.BoxGeometry(0.7, 0.35, 0.15),
             new THREE.MeshStandardMaterial({ color: beardColor, roughness: 0.95, flatShading: true })
@@ -252,46 +441,13 @@ export function createCharacter(scene, type = 'male') {
         beard.position.set(0, 1.55, 0.38);
         group.add(beard);
 
-        // Mustache
         const mustache = new THREE.Mesh(
             new THREE.BoxGeometry(0.35, 0.08, 0.1),
             new THREE.MeshStandardMaterial({ color: beardColor, roughness: 0.95 })
         );
         mustache.position.set(0, 1.68, 0.42);
         group.add(mustache);
-
-        // Sideburns
-        const sideburnL = new THREE.Mesh(
-            new THREE.BoxGeometry(0.1, 0.4, 0.15),
-            new THREE.MeshStandardMaterial({ color: beardColor, roughness: 0.95 })
-        );
-        sideburnL.position.set(-0.4, 1.65, 0.3);
-        group.add(sideburnL);
-        const sideburnR = new THREE.Mesh(
-            new THREE.BoxGeometry(0.1, 0.4, 0.15),
-            new THREE.MeshStandardMaterial({ color: beardColor, roughness: 0.95 })
-        );
-        sideburnR.position.set(0.4, 1.65, 0.3);
-        group.add(sideburnR);
-
-        // Eyebrows
-        const browL = new THREE.Mesh(
-            new THREE.BoxGeometry(0.18, 0.05, 0.08),
-            new THREE.MeshStandardMaterial({ color: beardColor, roughness: 0.9 })
-        );
-        browL.position.set(-0.18, 1.92, 0.38);
-        browL.rotation.z = 0.15;
-        group.add(browL);
-        const browR = new THREE.Mesh(
-            new THREE.BoxGeometry(0.18, 0.05, 0.08),
-            new THREE.MeshStandardMaterial({ color: beardColor, roughness: 0.9 })
-        );
-        browR.position.set(0.18, 1.92, 0.38);
-        browR.rotation.z = -0.15;
-        group.add(browR);
-
     } else {
-        // Female hair
         const hairTop = new THREE.Mesh(
             new THREE.BoxGeometry(0.85, 0.45, 0.8),
             new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.95, flatShading: true })
@@ -325,24 +481,8 @@ export function createCharacter(scene, type = 'male') {
         );
         bangs.position.set(0, 2.05, 0.36);
         group.add(bangs);
-
-        const browL = new THREE.Mesh(
-            new THREE.BoxGeometry(0.15, 0.03, 0.06),
-            new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.9 })
-        );
-        browL.position.set(-0.18, 1.92, 0.38);
-        browL.rotation.z = 0.15;
-        group.add(browL);
-        const browR = new THREE.Mesh(
-            new THREE.BoxGeometry(0.15, 0.03, 0.06),
-            new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.9 })
-        );
-        browR.position.set(0.18, 1.92, 0.38);
-        browR.rotation.z = -0.15;
-        group.add(browR);
     }
 
-    // ===== EYES =====
     const eyeGeo = new THREE.SphereGeometry(0.07, 12, 12);
     const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     const pupilGeo = new THREE.SphereGeometry(0.04, 8, 8);
@@ -362,7 +502,6 @@ export function createCharacter(scene, type = 'male') {
     pupilR.position.set(0.18, 1.82, 0.42);
     group.add(pupilR);
 
-    // ===== NOSE =====
     const nose = new THREE.Mesh(
         new THREE.ConeGeometry(0.08, 0.15, 4),
         new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.8, flatShading: true })
@@ -371,7 +510,6 @@ export function createCharacter(scene, type = 'male') {
     nose.rotation.x = Math.PI / 2;
     group.add(nose);
 
-    // ===== BODY =====
     const body = new THREE.Mesh(
         new THREE.BoxGeometry(0.9, 1.1, 0.55),
         new THREE.MeshStandardMaterial({ color: jacketColor, roughness: 0.85, flatShading: true })
@@ -387,14 +525,6 @@ export function createCharacter(scene, type = 'male') {
     shirt.position.set(0, 1.05, 0.01);
     group.add(shirt);
 
-    const collar = new THREE.Mesh(
-        new THREE.BoxGeometry(0.8, 0.15, 0.6),
-        new THREE.MeshStandardMaterial({ color: jacketColor, roughness: 0.85, flatShading: true })
-    );
-    collar.position.set(0, 1.62, 0);
-    group.add(collar);
-
-    // ===== ARMS =====
     const armGeo = new THREE.BoxGeometry(0.22, 0.95, 0.22);
     const armMat = new THREE.MeshStandardMaterial({ color: jacketColor, roughness: 0.85, flatShading: true });
     const handMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.8, flatShading: true });
@@ -415,7 +545,6 @@ export function createCharacter(scene, type = 'male') {
     handR.position.set(0.55, 0.5, 0);
     group.add(handR);
 
-    // ===== LEGS =====
     const legGeo = new THREE.BoxGeometry(0.25, 1.0, 0.25);
     const legMat = new THREE.MeshStandardMaterial({ color: pantsColor, roughness: 0.9, flatShading: true });
 
@@ -428,7 +557,6 @@ export function createCharacter(scene, type = 'male') {
     legR.castShadow = true;
     group.add(legR);
 
-    // ===== SHOES =====
     const shoeGeo = new THREE.BoxGeometry(0.3, 0.15, 0.4);
     const shoeMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9, flatShading: true });
     const shoeL = new THREE.Mesh(shoeGeo, shoeMat);
@@ -447,12 +575,13 @@ export function createCharacter(scene, type = 'male') {
         head
     };
 
+    scene.add(group);
+
     return group;
 }
 
 export function createFlower() {
     const group = new THREE.Group();
-
     const stem = new THREE.Mesh(
         new THREE.CylinderGeometry(0.03, 0.03, 0.6, 6),
         new THREE.MeshStandardMaterial({ color: 0x3a7a3a, roughness: 1 })
@@ -461,10 +590,7 @@ export function createFlower() {
     group.add(stem);
 
     const petalMat = new THREE.MeshStandardMaterial({
-        color: 0xff5a9a,
-        emissive: 0xff2060,
-        emissiveIntensity: 0.6,
-        roughness: 0.6
+        color: 0xff5a9a, emissive: 0xff2060, emissiveIntensity: 0.6, roughness: 0.6
     });
     for (let i = 0; i < 6; i++) {
         const angle = (i / 6) * Math.PI * 2;
@@ -488,30 +614,6 @@ export function createFlower() {
     return group;
 }
 
-export function createRainbow() {
-    const group = new THREE.Group();
-    const colors = [0xff0000, 0xff7700, 0xffff00, 0x00ff00, 0x0088ff, 0x4400ff, 0x8800ff];
-    const radiusBase = 30;
-
-    colors.forEach((color, i) => {
-        const radius = radiusBase + i * 0.8;
-        const curve = new THREE.EllipseCurve(0, 0, radius, radius, Math.PI, 0, false, 0);
-        const points = curve.getPoints(50);
-        const geometry = new THREE.BufferGeometry().setFromPoints(
-            points.map(p => new THREE.Vector3(p.x, p.y, 0))
-        );
-        const material = new THREE.LineBasicMaterial({
-            color: color,
-            transparent: true,
-            opacity: 0.6
-        });
-        const arc = new THREE.Line(geometry, material);
-        group.add(arc);
-    });
-
-    return group;
-}
-
 export function createButterflies(count = 30) {
     const group = new THREE.Group();
     const butterflies = [];
@@ -522,10 +624,7 @@ export function createButterflies(count = 30) {
         const color = colors[Math.floor(Math.random() * colors.length)];
 
         const wingMat = new THREE.MeshBasicMaterial({
-            color: color,
-            side: THREE.DoubleSide,
-            transparent: true,
-            opacity: 0.9
+            color: color, side: THREE.DoubleSide, transparent: true, opacity: 0.9
         });
 
         const wingL = new THREE.Mesh(new THREE.CircleGeometry(0.15, 8), wingMat);

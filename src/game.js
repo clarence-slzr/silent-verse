@@ -6,7 +6,6 @@ import {
     createPoemOrbs,
     createCharacter,
     createFlower,
-    createRainbow,
     createButterflies,
     createBirds
 } from './world.js';
@@ -40,7 +39,7 @@ export class Game {
         this.renderer.toneMappingExposure = 1.2;
 
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x2a1a4a);
+        this.scene.background = new THREE.Color(0x1a0a2a);
 
         this.camera = new THREE.PerspectiveCamera(
             70,
@@ -78,15 +77,16 @@ export class Game {
 
         // State
         this.gender = null;
+        this.playerName = '';
         this.player = null;
         this.partner = null;
         this.keys = {};
 
-        // ===== CAMERA MODE =====
-        this.cameraMode = 'third';                    // 'first' or 'third'
-        this.cameraAngle = { yaw: 0, pitch: 0.25 };   // pitch for third-person
-        this.firstPersonPitch = 0;                    // separate pitch for first-person
-        this.cameraDistance = 6;                      // distance in third-person
+        // Camera
+        this.cameraMode = 'third';
+        this.cameraAngle = { yaw: 0, pitch: 0.25 };
+        this.firstPersonPitch = 0;
+        this.cameraDistance = 6;
 
         this.isRunning = false;
         this.nearOrb = null;
@@ -99,6 +99,13 @@ export class Game {
         this.isJumping = false;
         this.groundY = 0;
 
+        // Animation
+        this.walkCycle = 0;
+
+        // Lives system (per puzzle)
+        this.currentLives = 3;
+        this.wrongAnswers = 0;
+
         // Click-to-move
         this.moveTarget = null;
         this.moveMarker = null;
@@ -110,6 +117,8 @@ export class Game {
 
         // UI
         this.counterEl = document.getElementById('counter');
+        this.livesEl = document.getElementById('lives-display');
+        this.nameDisplay = document.getElementById('player-name-display');
         this.puzzleModal = document.getElementById('puzzle-modal');
         this.puzzlePoem = document.getElementById('puzzle-poem');
         this.puzzleQuestion = document.getElementById('puzzle-question');
@@ -118,7 +127,6 @@ export class Game {
         this.interactPrompt = document.getElementById('interact-prompt');
         this.interactText = document.getElementById('interact-text');
 
-        // Camera UI
         this.cameraToggle = document.getElementById('camera-toggle');
         this.cameraMenu = document.getElementById('camera-menu');
         this.cameraOptions = document.querySelectorAll('.camera-option');
@@ -127,19 +135,31 @@ export class Game {
         this.animate();
     }
 
-    start(gender) {
+    start(gender, playerName) {
         this.gender = gender;
+        this.playerName = playerName || 'Wanderer';
         this.player = createCharacter(this.scene, gender);
         this.player.position.set(0, this.getGroundHeight(0, 0), 0);
         this.groundY = this.player.position.y;
         this.updatePlayerVisibility();
+
+        // Display name
+        if (this.nameDisplay) {
+            this.nameDisplay.textContent = `— ${this.playerName} —`;
+        }
+
         audio.startBg();
     }
 
     updatePlayerVisibility() {
-        // In first-person, hide the player's own body
         if (!this.player) return;
         this.player.visible = (this.cameraMode === 'third');
+    }
+
+    updateLivesDisplay() {
+        const full = '❤️'.repeat(this.currentLives);
+        const empty = '🖤'.repeat(3 - this.currentLives);
+        if (this.livesEl) this.livesEl.textContent = full + empty;
     }
 
     bindEvents() {
@@ -210,7 +230,6 @@ export class Game {
             this.setMoveTarget(touch.clientX, touch.clientY);
         }, { passive: true });
 
-        // Jump
         const jumpBtn = document.getElementById('jump-btn');
         if (jumpBtn) {
             jumpBtn.addEventListener('touchstart', (e) => {
@@ -220,7 +239,6 @@ export class Game {
             jumpBtn.addEventListener('click', () => this.jump());
         }
 
-        // ===== CAMERA TOGGLE =====
         this.cameraToggle.addEventListener('click', (e) => {
             e.stopPropagation();
             this.cameraMenu.classList.toggle('show');
@@ -229,23 +247,19 @@ export class Game {
         this.cameraOptions.forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const mode = btn.dataset.mode;
-                this.setCameraMode(mode);
+                this.setCameraMode(btn.dataset.mode);
                 this.cameraMenu.classList.remove('show');
             });
         });
 
-        // Close camera menu when clicking elsewhere
         document.addEventListener('click', (e) => {
             if (!this.cameraMenu.contains(e.target) && e.target !== this.cameraToggle) {
                 this.cameraMenu.classList.remove('show');
             }
         });
 
-        // Puzzle
         document.getElementById('close-puzzle').addEventListener('click', () => this.closePuzzle());
 
-        // Final poem button
         const finalBtn = document.getElementById('final-poem-btn');
         if (finalBtn) {
             finalBtn.addEventListener('click', () => {
@@ -260,19 +274,14 @@ export class Game {
 
     setCameraMode(mode) {
         this.cameraMode = mode;
-
-        // Update button states
         this.cameraOptions.forEach(btn => {
             btn.classList.toggle('active', btn.dataset.mode === mode);
         });
-
-        // Reset pitch when switching
         if (mode === 'first') {
             this.firstPersonPitch = 0;
         } else {
             this.cameraAngle.pitch = 0.25;
         }
-
         this.updatePlayerVisibility();
     }
 
@@ -297,10 +306,7 @@ export class Game {
         if (!this.moveMarker) {
             const geo = new THREE.RingGeometry(0.4, 0.6, 32);
             const mat = new THREE.MeshBasicMaterial({
-                color: 0xc9a0ff,
-                transparent: true,
-                opacity: 0.8,
-                side: THREE.DoubleSide
+                color: 0xc9a0ff, transparent: true, opacity: 0.8, side: THREE.DoubleSide
             });
             this.moveMarker = new THREE.Mesh(geo, mat);
             this.moveMarker.rotation.x = -Math.PI / 2;
@@ -326,14 +332,10 @@ export class Game {
 
         const speed = this.isRunning ? 12 : 6;
         const forward = new THREE.Vector3(
-            -Math.sin(this.cameraAngle.yaw),
-            0,
-            -Math.cos(this.cameraAngle.yaw)
+            -Math.sin(this.cameraAngle.yaw), 0, -Math.cos(this.cameraAngle.yaw)
         );
         const right = new THREE.Vector3(
-            -Math.cos(this.cameraAngle.yaw),
-            0,
-            Math.sin(this.cameraAngle.yaw)
+            -Math.cos(this.cameraAngle.yaw), 0, Math.sin(this.cameraAngle.yaw)
         );
 
         let move = new THREE.Vector3();
@@ -345,8 +347,7 @@ export class Game {
 
         if (move.length() === 0 && this.moveTarget) {
             const dir = new THREE.Vector3(
-                this.moveTarget.x - this.player.position.x,
-                0,
+                this.moveTarget.x - this.player.position.x, 0,
                 this.moveTarget.z - this.player.position.z
             );
             if (dir.length() > 0.5) {
@@ -356,7 +357,9 @@ export class Game {
             }
         }
 
-        if (move.length() > 0) {
+        const isMoving = move.length() > 0;
+
+        if (isMoving) {
             move.normalize();
             const next = this.player.position.clone().addScaledVector(move, speed * dt);
 
@@ -380,12 +383,10 @@ export class Game {
                 }
             }
 
-            // Rotate player to face movement (only matters in third-person)
             const targetRot = Math.atan2(move.x, move.z);
             this.player.rotation.y = this.lerpAngle(this.player.rotation.y, targetRot, 0.2);
         }
 
-        // Vertical physics (jump)
         const groundY = this.getGroundHeight(this.player.position.x, this.player.position.z);
         this.groundY = groundY;
 
@@ -401,17 +402,26 @@ export class Game {
             this.player.position.y = groundY;
         }
 
-        // Walk animation
-        const t = performance.now() * 0.005;
-        const moving = move.length() > 0;
-        if (this.player.userData.leftArm) {
-            if (moving) {
-                this.player.userData.leftArm.rotation.x = Math.sin(t) * 0.5;
-                this.player.userData.rightArm.rotation.x = -Math.sin(t) * 0.5;
-            } else {
-                this.player.userData.leftArm.rotation.x *= 0.9;
-                this.player.userData.rightArm.rotation.x *= 0.9;
-            }
+        // 3D Walk animation
+        const u = this.player.userData;
+        if (isMoving && !this.isJumping) {
+            this.walkCycle += dt * (this.isRunning ? 14 : 9);
+            const swing = Math.sin(this.walkCycle);
+            const counterSwing = Math.sin(this.walkCycle + Math.PI);
+
+            if (u.leftArm) u.leftArm.rotation.x = swing * 0.7;
+            if (u.rightArm) u.rightArm.rotation.x = -swing * 0.7;
+            if (u.leftLeg) u.leftLeg.rotation.x = counterSwing * 0.6;
+            if (u.rightLeg) u.rightLeg.rotation.x = swing * 0.6;
+
+            const bob = Math.abs(Math.sin(this.walkCycle)) * 0.08;
+            this.player.position.y += bob;
+        } else {
+            const resetLerp = 0.15;
+            if (u.leftArm) u.leftArm.rotation.x *= (1 - resetLerp);
+            if (u.rightArm) u.rightArm.rotation.x *= (1 - resetLerp);
+            if (u.leftLeg) u.leftLeg.rotation.x *= (1 - resetLerp);
+            if (u.rightLeg) u.rightLeg.rotation.x *= (1 - resetLerp);
         }
     }
 
@@ -426,14 +436,9 @@ export class Game {
         if (!this.player || this.endingMode) return;
 
         if (this.cameraMode === 'first') {
-            // ===== FIRST PERSON =====
             const eyeHeight = this.player.position.y + 1.65;
             this.camera.position.lerp(
-                new THREE.Vector3(
-                    this.player.position.x,
-                    eyeHeight,
-                    this.player.position.z
-                ),
+                new THREE.Vector3(this.player.position.x, eyeHeight, this.player.position.z),
                 1 - Math.pow(0.0001, dt)
             );
 
@@ -448,7 +453,6 @@ export class Game {
                 this.camera.position.z + dir.z
             );
         } else {
-            // ===== THIRD PERSON =====
             const targetY = this.player.position.y + 1.2;
             const dist = this.cameraDistance;
 
@@ -460,11 +464,7 @@ export class Game {
                 new THREE.Vector3(camX, camY, camZ),
                 1 - Math.pow(0.001, dt)
             );
-            this.camera.lookAt(
-                this.player.position.x,
-                targetY,
-                this.player.position.z
-            );
+            this.camera.lookAt(this.player.position.x, targetY, this.player.position.z);
         }
     }
 
@@ -516,6 +516,11 @@ export class Game {
         this.currentOrb = orb;
         document.exitPointerLock?.();
 
+        // Reset lives for this puzzle
+        this.currentLives = 3;
+        this.wrongAnswers = 0;
+        this.updateLivesDisplay();
+
         const p = orb.userData.puzzle;
         const idx = orb.userData.index;
         this.puzzlePoem.textContent = p.excerpt;
@@ -548,12 +553,59 @@ export class Game {
             this.puzzleChoices.querySelectorAll('button').forEach(b => b.disabled = true);
             setTimeout(() => this.solvePuzzle(this.currentOrb), 900);
         } else {
+            // Wrong answer
             btn.classList.add('wrong');
             btn.disabled = true;
-            this.puzzleFeedback.textContent = '🌙 Not quite... Read the excerpt again.';
-            this.puzzleFeedback.className = 'feedback err';
+            this.currentLives--;
+            this.wrongAnswers++;
+            this.updateLivesDisplay();
             audio.wrong();
+
+            if (this.currentLives <= 0) {
+                // Out of lives — orb disappears and relocates
+                this.puzzleFeedback.textContent = '💔 Out of lives! The poem fades away... Find it elsewhere.';
+                this.puzzleFeedback.className = 'feedback err';
+                this.puzzleChoices.querySelectorAll('button').forEach(b => b.disabled = true);
+
+                setTimeout(() => {
+                    this.relocateOrb(this.currentOrb);
+                    this.closePuzzle();
+                }, 2000);
+            } else {
+                this.puzzleFeedback.textContent = `🌙 Not quite... ${this.currentLives} ${this.currentLives === 1 ? 'life' : 'lives'} left.`;
+                this.puzzleFeedback.className = 'feedback err';
+            }
         }
+    }
+
+    relocateOrb(orb) {
+        // Pick new random position, away from player
+        let newX, newZ, newY;
+        let attempts = 0;
+        do {
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 30 + Math.random() * 60;
+            newX = Math.cos(angle) * radius;
+            newZ = Math.sin(angle) * radius;
+            newY = this.getGroundHeight(newX, newZ);
+            attempts++;
+        } while (
+            this.player &&
+            Math.hypot(newX - this.player.position.x, newZ - this.player.position.z) < 15 &&
+            attempts < 20
+        );
+
+        orb.position.set(newX, newY + 1.5, newZ);
+        orb.userData.baseY = newY + 1.5;
+
+        // Add a small note showing relocation
+        const note = document.createElement('div');
+        note.className = 'note';
+        note.textContent = '✨ The poem moved to a new place...';
+        this.notesContainer.appendChild(note);
+        setTimeout(() => {
+            if (note.parentNode) note.parentNode.removeChild(note);
+        }, 4200);
     }
 
     solvePuzzle(orb) {
@@ -583,6 +635,8 @@ export class Game {
         this.puzzleActive = false;
         this.puzzleModal.classList.remove('active');
         this.currentOrb = null;
+        this.currentLives = 3;
+        this.updateLivesDisplay();
     }
 
     startEnding() {
@@ -593,13 +647,19 @@ export class Game {
 
         const endX = 0, endZ = 0;
         this.player.position.set(endX - 0.7, this.getGroundHeight(endX - 0.7, endZ), endZ);
-        this.player.rotation.y = 0;
+        this.player.rotation.y = Math.PI;
         this.player.visible = true;
+
+        const u = this.player.userData;
+        if (u.leftArm) u.leftArm.rotation.x = 0;
+        if (u.rightArm) u.rightArm.rotation.x = 0;
+        if (u.leftLeg) u.leftLeg.rotation.x = 0;
+        if (u.rightLeg) u.rightLeg.rotation.x = 0;
 
         const partnerGender = this.gender === 'male' ? 'female' : 'male';
         this.partner = createCharacter(this.scene, partnerGender);
         this.partner.position.set(endX + 0.7, this.getGroundHeight(endX + 0.7, endZ), endZ);
-        this.partner.rotation.y = 0;
+        this.partner.rotation.y = Math.PI;
 
         this.flower = createFlower();
         this.flower.position.set(0, this.getGroundHeight(0, -1.5) + 1, -1.5);
@@ -612,53 +672,18 @@ export class Game {
             this.flower.visible = true;
             audio.endingChime();
             this.flowerAnimation();
-            this.spawnEndingEffects();
-        }, 3000);
+        }, 2000);
 
-        setTimeout(() => this.showEndingUI(), 7000);
-    }
-
-    spawnEndingEffects() {
-        this.rainbow = createRainbow();
-        this.rainbow.position.set(0, 20, -80);
-        this.scene.add(this.rainbow);
-
-        this.butterflies = createButterflies(30);
-        this.scene.add(this.butterflies.group);
-
-        this.birds = createBirds(12);
-        this.scene.add(this.birds.group);
-    }
-
-    animateSunset() {
-        const startBg = new THREE.Color(0x2a1a4a);
-        const endBg = new THREE.Color(0xffb080);
-        const startSun = new THREE.Color(0xffd8a0);
-        const endSun = new THREE.Color(0xff8060);
-        const startPos = this.sun.position.clone();
-        const endPos = new THREE.Vector3(-100, 15, -120);
-
-        const duration = 6000;
-        const start = performance.now();
-
-        const animate = () => {
-            const t = Math.min(1, (performance.now() - start) / duration);
-            const ease = 1 - Math.pow(1 - t, 3);
-
-            this.scene.background.copy(startBg).lerp(endBg, ease);
-            this.scene.fog.color.copy(startBg).lerp(endBg, ease);
-            this.sun.color.copy(startSun).lerp(endSun, ease);
-            this.sun.position.lerpVectors(startPos, endPos, ease);
-            this.sun.intensity = 1.4 + ease * 0.6;
-
-            if (t < 1) requestAnimationFrame(animate);
-        };
-        animate();
+        setTimeout(() => this.spawnEndingEffects(), 4000);
+        setTimeout(() => this.sitDownAnimation(), 5500);
+        setTimeout(() => this.showEndingUI(), 8000);
     }
 
     flowerAnimation() {
         const startY = this.flower.position.y;
-        const targetY = this.player.position.y + 1.3;
+        const startZ = this.flower.position.z;
+        const targetY = this.player.position.y + 1.2;
+        const targetZ = this.player.position.z - 0.8;
         const duration = 2000;
         const start = performance.now();
 
@@ -666,7 +691,70 @@ export class Game {
             const t = Math.min(1, (performance.now() - start) / duration);
             const ease = 1 - Math.pow(1 - t, 3);
             this.flower.position.y = startY + (targetY - startY) * ease;
-            this.flower.rotation.y += 0.02;
+            this.flower.position.z = startZ + (targetZ - startZ) * ease;
+            this.flower.rotation.y += 0.03;
+            if (t < 1) requestAnimationFrame(animate);
+        };
+        animate();
+    }
+
+    sitDownAnimation() {
+        const sitOffset = -0.5;
+        const duration = 1500;
+        const start = performance.now();
+        const startY1 = this.player.position.y;
+        const startY2 = this.partner.position.y;
+
+        const animate = () => {
+            const t = Math.min(1, (performance.now() - start) / duration);
+            const ease = 1 - Math.pow(1 - t, 3);
+            this.player.position.y = startY1 + sitOffset * ease;
+            this.partner.position.y = startY2 + sitOffset * ease;
+            if (t < 1) requestAnimationFrame(animate);
+        };
+        animate();
+    }
+
+    spawnEndingEffects() {
+        this.butterflies = createButterflies(25);
+        this.scene.add(this.butterflies.group);
+
+        this.birds = createBirds(10);
+        this.scene.add(this.birds.group);
+    }
+
+    animateSunset() {
+        const startBg = new THREE.Color(0x1a0a2a);
+        const midBg = new THREE.Color(0xff8060);
+        const endBg = new THREE.Color(0xffb080);
+
+        const startSunColor = new THREE.Color(0xffd8a0);
+        const endSunColor = new THREE.Color(0xff6040);
+
+        const startPos = this.sun.position.clone();
+        const endPos = new THREE.Vector3(-80, 8, -120);
+
+        const duration = 5000;
+        const start = performance.now();
+
+        const animate = () => {
+            const t = Math.min(1, (performance.now() - start) / duration);
+            const ease = 1 - Math.pow(1 - t, 3);
+
+            if (ease < 0.5) {
+                const t2 = ease * 2;
+                this.scene.background.copy(startBg).lerp(midBg, t2);
+                this.scene.fog.color.copy(startBg).lerp(midBg, t2);
+            } else {
+                const t2 = (ease - 0.5) * 2;
+                this.scene.background.copy(midBg).lerp(endBg, t2);
+                this.scene.fog.color.copy(midBg).lerp(endBg, t2);
+            }
+
+            this.sun.color.copy(startSunColor).lerp(endSunColor, ease);
+            this.sun.position.lerpVectors(startPos, endPos, ease);
+            this.sun.intensity = 1.4 + ease * 0.6;
+
             if (t < 1) requestAnimationFrame(animate);
         };
         animate();
@@ -680,14 +768,15 @@ export class Game {
     updateEndingCamera(dt) {
         if (!this.endingMode || !this.player) return;
 
-        const midX = this.player.position.x;
-        const midZ = this.player.position.z;
+        const midX = (this.player.position.x + (this.partner?.position.x || 0)) / 2;
+        const midZ = (this.player.position.z + (this.partner?.position.z || 0)) / 2;
+
         const targetX = midX;
-        const targetZ = midZ + 6;
+        const targetZ = midZ + 7;
         const targetY = this.getGroundHeight(midX, midZ) + 3;
 
         this.camera.position.lerp(new THREE.Vector3(targetX, targetY, targetZ), 1 - Math.pow(0.001, dt));
-        this.camera.lookAt(midX, this.getGroundHeight(midX, midZ) + 1.5, midZ - 30);
+        this.camera.lookAt(midX, this.getGroundHeight(midX, midZ) + 1.2, midZ - 30);
     }
 
     animate() {
@@ -715,6 +804,13 @@ export class Game {
 
         if (this.butterflies) this.butterflies.update(dt);
         if (this.birds) this.birds.update(dt);
+
+        // Animate campfire light
+        this.scene.traverse(obj => {
+            if (obj.userData.isFireLight) {
+                obj.intensity = 2.5 + Math.sin(performance.now() * 0.005) * 0.8;
+            }
+        });
 
         this.renderer.render(this.scene, this.camera);
     }

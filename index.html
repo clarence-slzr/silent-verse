@@ -12,11 +12,19 @@
     <div id="app">
         <canvas id="scene"></canvas>
 
+        <!-- HUD -->
         <div id="hud">
-            <div id="objective">Objective: Find Mystery Poems</div>
-            <div id="counter">Found: 0 / 7</div>
+            <div id="hud-left">
+                <div id="objective">Objective: Find Mystery Poems</div>
+                <div id="player-name-display"></div>
+            </div>
+            <div id="hud-right">
+                <div id="counter">Found: 0 / 7</div>
+                <div id="lives-display">❤️❤️❤️</div>
+            </div>
         </div>
 
+        <!-- Camera toggle -->
         <button id="camera-toggle" class="camera-icon" aria-label="Camera options">
             <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
@@ -29,16 +37,20 @@
             <button class="camera-option" data-mode="first">👁 First Person (POV)</button>
         </div>
 
+        <!-- Floating notes -->
         <div id="notes-container"></div>
 
+        <!-- Interact prompt -->
         <div id="interact-prompt">
             <span id="interact-text">Press <b>E</b> to read</span>
         </div>
 
+        <!-- Mobile jump -->
         <div id="mobile-controls">
             <button id="jump-btn" class="mobile-btn">↑<br />JUMP</button>
         </div>
 
+        <!-- START SCREEN -->
         <div id="start-screen" class="screen active">
             <div class="panel">
                 <h1>SILENT VERSE</h1>
@@ -49,6 +61,11 @@
                     But the path leading to them is full of mysterious poems.<br />
                     Answer each riddle to reach the end.
                 </p>
+
+                <p class="choose">ENTER YOUR NAME:</p>
+                <input type="text" id="name-input" class="name-input" placeholder="Your name..." maxlength="16"
+                    autocomplete="off" />
+
                 <p class="choose">CHOOSE YOUR CHARACTER:</p>
                 <div class="choices">
                     <button id="pick-male" class="choice-btn">
@@ -64,6 +81,7 @@
             </div>
         </div>
 
+        <!-- PUZZLE MODAL -->
         <div id="puzzle-modal" class="screen">
             <div class="panel puzzle-panel">
                 <div class="poem" id="puzzle-poem"></div>
@@ -76,6 +94,7 @@
             </div>
         </div>
 
+        <!-- ENDING SCREEN -->
         <div id="ending-screen" class="screen">
             <div class="ending-content">
                 <p class="ending-caption">Together at last.</p>
